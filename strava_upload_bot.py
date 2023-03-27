@@ -55,10 +55,10 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'Authorization': f'Bearer {bearer}'
     }
     files = {
-        'activity': open(file_name, 'rb')
+        'file': open(file_name, 'rb')
         }
     response = requests.post(url, params=params, headers=headers, files=files)
-    upload_id = response.json()['id']
+    upload_id = response.json()['id_str']
     
     #Проверка статуса загрузки
     time.sleep(30)
@@ -66,7 +66,7 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     headers = {
         'Authorization': f'Bearer {bearer}'
     }
-    response = requests.post(url, headers=headers)
+    response = requests.get(url, headers=headers)
     await update.message.reply_text(response.json()['status'])
 
 def main() -> None:   
