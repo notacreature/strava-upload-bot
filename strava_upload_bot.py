@@ -37,7 +37,7 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     #Получение файла от API Telegram
     open(file_name, 'wb').write(requests.get(file_data.file_path).content)
-    time.sleep(15)#Как еще можно дождаться конца скачивания файла?
+    time.sleep(20)#Как еще можно дождаться конца скачивания файла?
     
     #Обновление токена
     url = f'https://www.strava.com/api/v3/oauth/token?client_id={STRAVA_CLIENT_ID}&client_secret={STRAVA_CLIENT_SECRET}&grant_type=refresh_token&refresh_token={refresh_token}'
