@@ -45,14 +45,27 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bearer = response.json()['access_token']
     
     #Загрузка файла в Strava
-    url = 'https://www.strava.com/api/v3/uploads?name=api_test&data_type=gpx&activity_type=run'
-    files = {'activity': open(file_name, 'rb')}
-    response = requests.post(url, headers={'Authorization': f'Bearer {bearer}'}, files=files)
+    url = 'https://www.strava.com/api/v3/uploads'
+    params = {
+        'name': 'telegram_bot_test',
+        'data_type': 'gpx',
+        'activity_type': 'run'
+        }
+    headers = {
+        'Authorization': f'Bearer {bearer}'
+    }
+    files = {
+        'activity': open(file_name, 'rb')
+        }
+    response = requests.post(url, params=params, headers=headers, files=files)
 
     #Проверка статуса загрузки
     upload_id = response.json()['id']
     url = f'https://www.strava.com/api/v3/uploads/{upload_id}'
-    response = requests.post(url, headers={'Authorization': f'Bearer {bearer}'})
+    headers = {
+        'Authorization': f'Bearer {bearer}'
+    }
+    response = requests.post(url, headers=headers)
     await update.message.reply_text(response.json()['status'])
 
 def main() -> None:   
