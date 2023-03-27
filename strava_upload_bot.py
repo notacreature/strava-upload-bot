@@ -58,9 +58,10 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'activity': open(file_name, 'rb')
         }
     response = requests.post(url, params=params, headers=headers, files=files)
-
-    #Проверка статуса загрузки
     upload_id = response.json()['id']
+    
+    #Проверка статуса загрузки
+    time.sleep(30)
     url = f'https://www.strava.com/api/v3/uploads/{upload_id}'
     headers = {
         'Authorization': f'Bearer {bearer}'
