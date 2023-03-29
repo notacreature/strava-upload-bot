@@ -5,7 +5,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 BOT_TOKEN = '5976143199:AAHUSdb47E-MCiPwTs1WSGym-5fs2BsmfAo'
 STRAVA_CLIENT_ID = '104425'
 STRAVA_CLIENT_SECRET = '4a4733df7d14ce6b5e6dcc30b0610ad10e555c70'
-GET_CODE_URL = f'http://www.strava.com/oauth/authorize?client_id={STRAVA_CLIENT_ID}&response_type=code&approval_prompt=force&scope=activity:write&redirect_uri=https://t.me/StravaUploadActivityBot'
+REDIRECT_URL = 'http://localhost:8000/'
 
 #Логирование
 logging.basicConfig(
@@ -15,9 +15,10 @@ logging.basicConfig(
 
 #Обработка /start, /help; Вывод информационного сообщения
 async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    inline_button = InlineKeyboardButton("Перейти к Strava", url=GET_CODE_URL)
+    user_id = update.message.from_user.id
+    inline_button = InlineKeyboardButton("Перейти к Strava", url=f'http://www.strava.com/oauth/authorize?client_id={STRAVA_CLIENT_ID}&response_type=code&scope=activity:write&redirect_uri={REDIRECT_URL}?user_id={user_id}')
     inline_keyboard= InlineKeyboardMarkup( [[inline_button]] )
-    await update.message.reply_text('Для использования бота, разрешите загружать файлы в Strava от вашего имени', reply_markup=inline_keyboard)
+    await update.message.reply_text(f'Для использования бота, разрешите загружать файлы в Strava от вашего имени', reply_markup=inline_keyboard)
 
 #Обмен кода на токен; ПЕРЕДЕЛАТЬ НА РЕГИСТРАЦИЮ ПРИЛОЖЕНИЯ
 async def get_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
