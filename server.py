@@ -1,6 +1,6 @@
-import socketserver, csv 
 from http import server
-from socketserver import BaseServer
+from socketserver import BaseServer, TCPServer
+from tinydb import TinyDB, Query
 
 #Определяем порт, на котором будет работать сервер
 PORT = 8000
@@ -24,10 +24,11 @@ class MyHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         self.end_headers()
        
         #Сохраняем параметры в хранилище
-        
+        db = TinyDB('userdata.json')
+        db.insert({'user_id': params['user_id'], 'auth_code': params['code']})
         
 #Создаем объект сервера, используя класс TCPServer из модуля socketserver
-my_server = socketserver.TCPServer(("", PORT), MyHTTPRequestHandler)
+my_server = TCPServer(("", PORT), MyHTTPRequestHandler)
 
 #Выводим информацию о запуске сервера
 print(f"HTTP server running on port {PORT}")
