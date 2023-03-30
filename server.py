@@ -1,6 +1,6 @@
 from http import server
 from socketserver import BaseServer, TCPServer
-from tinydb import TinyDB, Query
+from tinydb import TinyDB
 
 #Определяем порт, на котором будет работать сервер
 PORT = 8000

@@ -1,5 +1,5 @@
-import requests, time, asyncio, os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+import os, requests, aiofiles
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, constants
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 from tinydb import TinyDB, Query
 
@@ -9,13 +9,28 @@ STRAVA_CLIENT_SECRET = '4a4733df7d14ce6b5e6dcc30b0610ad10e555c70'
 REDIRECT_URL = 'http://localhost:8000/'
 
 
-#Обработка /start, /help; Вывод информационного сообщения
-async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#Обработка /start; Вывод приветствия
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     inline_button = InlineKeyboardButton("Перейти к Strava", url=f'http://www.strava.com/oauth/authorize?client_id={STRAVA_CLIENT_ID}&response_type=code&scope=activity:write&redirect_uri={REDIRECT_URL}?user_id={user_id}')
-    inline_keyboard= InlineKeyboardMarkup( [[inline_button]] )
-    await update.message.reply_text(f'Для использования бота, разрешите загружать файлы в Strava от вашего имени', reply_markup=inline_keyboard)
+    inline_keyboard= InlineKeyboardMarkup([[inline_button]])
+    await update.message.reply_text('Привет! Я помогу вам опубликовать активность в Strava.\nДля начала, разрешите мне загружать файлы в Strava от вашего имени 👇', reply_markup=inline_keyboard)
+    await update.message.reply_text('После того, как я получу разрешение, пришлите мне в чат файл в формате `.gpx` и я опубликую активность 🏃‍♂️🏃‍♀️', constants.ParseMode.MARKDOWN)
 
+
+#Обработка /help; Вывод информационного сообщения
+async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    text = f'''Как публиковать активность в Strava с помощью этого бота:
+    1. Перейдите по ссылке [https://www.strava.com](http://www.strava.com/oauth/authorize?client_id={STRAVA_CLIENT_ID}&response_type=code&scope=activity:write&redirect_uri={REDIRECT_URL}?user_id={user_id})
+    2. В открывшемся окне нажмите *Разрешить*
+    3. Пришлите в чат файл формата `.gpx`
+    4. Бот автоматически опубликует вашу активность'''
+    await update.message.reply_text(text, constants.ParseMode.MARKDOWN)
+
+#Обработка прочего текста
+async def other(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text('К сожалению, я не знаю, что на это ответить 🤖\nПопробуйте ввести команду `/help`.', constants.ParseMode.MARKDOWN)
 
 #Загрузка активности в Strava
 async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -26,11 +41,11 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db = TinyDB('userdata.json')
     user = Query()
     
-    #Получение файла от API Telegram
-    open(f'storage/{file_name}', 'wb').write(requests.get(file_data.file_path).content)
-    time.sleep(20)#Как еще можно дождаться конца скачивания файла?
+    #Получение файла от API Telegram и запись в файл на сервер
+    async with aiofiles.open(f'storage/{file_name}', 'wb') as bytes:
+        await bytes.write(requests.get(file_data.file_path).content)
     
-    #Попытка получить refresh_token из БД; при неуспехе получаем от API и добавляем текущему пользователю в БД
+    #Попытка получить refresh_token из БД; при неуспехе получаем от API
     try:
         refresh_token = db.search(user.user_id == user_id)[0]['refresh_token']
     except (IndexError, KeyError):
@@ -44,9 +59,8 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
         response = requests.post(url, params=params)
         refresh_token = response.json()['refresh_token']
-        db.update({'refresh_token': refresh_token}, user['user_id'] == user_id)
     
-    #Обновление токена
+    #Получение access_token и обновление refresh_token
     url = f'https://www.strava.com/api/v3/oauth/token'
     params = {
         'client_id': f'{STRAVA_CLIENT_ID}',
@@ -56,43 +70,50 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
     response = requests.post(url, params=params)
     bearer = response.json()['access_token']
+    refresh_token = response.json()['refresh_token']
+    db.update({'refresh_token': refresh_token}, user['user_id'] == user_id)
+
     
     #Загрузка файла в Strava
+    async with aiofiles.open(f'storage/{file_name}', 'rb') as bytes:
+        file = await bytes.read()
     url = 'https://www.strava.com/api/v3/uploads'
     params = {
-        'name': 'telegram_bot_test',
         'data_type': 'gpx',
         'activity_type': 'run'
         }
     headers = {
         'Authorization': f'Bearer {bearer}'
-    }
+        }
     files = {
-        'file': open(f'storage/{file_name}', 'rb')
+        'file': file
         }
     response = requests.post(url, params=params, headers=headers, files=files)
     upload_id = response.json()['id_str']
     
     #Проверка статуса загрузки
-    time.sleep(30)
     url = f'https://www.strava.com/api/v3/uploads/{upload_id}'
     headers = {
         'Authorization': f'Bearer {bearer}'
-    }
-    response = requests.get(url, headers=headers)
+        }
+    while True:
+        response = requests.get(url, headers=headers)
+        if response.json()['status'] != 'Your activity is still being processed.':
+            break
     await update.message.reply_text(response.json()['status'])
-
+    
     try:
         os.remove(f'storage/{file_name}')
-    except:
+    except FileNotFoundError:
         pass
 
 
-def main() -> None:   
+def main():   
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     
-    application.add_handler(CommandHandler('start', info))
-    application.add_handler(CommandHandler('help', info))
+    application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('help', help))
+    application.add_handler(MessageHandler(filters.TEXT, other))
     application.add_handler(MessageHandler(filters.ATTACHMENT, upload_activity))
 
     application.run_polling()
