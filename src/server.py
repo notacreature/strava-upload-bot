@@ -1,10 +1,10 @@
+import configparser
 from http import server
 from socketserver import BaseServer, TCPServer
-from tinydb import TinyDB
+from tinydb import TinyDB, Query
 
-#Определяем порт, на котором будет работать сервер
-PORT = 8000
-BOT_URL = 'https://t.me/StravaUploadActivityBot'
+config = configparser.ConfigParser()
+config.read('../settings.ini')
 
 #Создаем свой класс обработчика запросов, наследуя от SimpleHTTPRequestHandler
 class MyHTTPRequestHandler(server.SimpleHTTPRequestHandler):
@@ -13,6 +13,7 @@ class MyHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         #Получаем путь и параметры запроса
         path = self.path
         params = {}
+        url = config['Telegram']['BOT_URL']
         if "?" in path:
             path, query = path.split("?", 1)
             for pair in query.split("&"):
@@ -20,18 +21,24 @@ class MyHTTPRequestHandler(server.SimpleHTTPRequestHandler):
                 params[key] = value
         
         self.send_response(301)
-        self.send_header('Location', BOT_URL)
+        self.send_header('Location', url)
         self.end_headers()
-       
-        #Сохраняем параметры в хранилище
-        db = TinyDB('userdata.json')
-        db.insert({'user_id': params['user_id'], 'auth_code': params['code']})
         
+        #TODO Баг: если база пуста, вызов if возвращает ошибку, потому что в ней нет ключа 'user_id'
+        #Сохраняем параметры в хранилище
+        db = TinyDB('../storage/userdata.json')
+        user = Query()
+        if db.contains(user['user_id'] == params['user_id']):
+            db.update({'auth_code': params['code']}, user['user_id'] == params['user_id'])
+        else:
+            db.insert({'user_id': params['user_id'], 'auth_code': params['code']})
+
 #Создаем объект сервера, используя класс TCPServer из модуля socketserver
-my_server = TCPServer(("", PORT), MyHTTPRequestHandler)
+port = int(config['Server']['PORT'])
+my_server = TCPServer(("", port), MyHTTPRequestHandler)
 
 #Выводим информацию о запуске сервера
-print(f"HTTP server running on port {PORT}")
+print(f"HTTP server running on port {port}")
 
 #Запускаем бесконечный цикл обработки запросов
 BaseServer.serve_forever(my_server)
