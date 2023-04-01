@@ -27,7 +27,7 @@ class MyHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         
         #TODO Баг: если база пуста, вызов if возвращает ошибку, потому что в ней нет ключа 'user_id'
         #Сохраняем параметры в хранилище
-        db = TinyDB(os.path.join(os.path.dirname(__file__), '..', '/storage/userdata.json'))
+        db = TinyDB(os.path.join(os.path.dirname(__file__), '..', 'storage', 'userdata.json'))
         user = Query()
         if db.contains(user['user_id'] == params['user_id']):
             db.update({'auth_code': params['code']}, user['user_id'] == params['user_id'])

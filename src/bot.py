@@ -47,11 +47,11 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_id = update.message.document.file_id
     file_name = update.message.document.file_name
     file_data = await context.bot.get_file(file_id)
-    db = TinyDB(os.path.join(os.path.dirname(__file__), '..', '/storage/userdata.json'))
+    db = TinyDB(os.path.join(os.path.dirname(__file__), '..', 'storage', 'userdata.json'))
     user = Query()
     
     #Получение файла от API Telegram и запись в файл на сервер
-    async with aiofiles.open(os.path.join(os.path.dirname(__file__), '..', f'/storage/{file_name}'), 'wb') as bytes:
+    async with aiofiles.open(os.path.join(os.path.dirname(__file__), '..', 'storage', {file_name}), 'wb') as bytes:
         await bytes.write(requests.get(file_data.file_path).content)
     
     #Попытка получить refresh_token из БД; при неуспехе получаем от API
@@ -83,7 +83,7 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.update({'refresh_token': refresh_token}, user['user_id'] == user_id)
 
     #Загрузка файла в Strava
-    async with aiofiles.open(os.path.join(os.path.dirname(__file__), '..', f'/storage/{file_name}'), 'rb') as bytes:
+    async with aiofiles.open(os.path.join(os.path.dirname(__file__), '..', 'storage', {file_name}), 'rb') as bytes:
         file = await bytes.read()
     url = 'https://www.strava.com/api/v3/uploads'
     params = {
@@ -112,7 +112,7 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(response.json()['status'])
     
     try:
-        os.remove(os.path.join(os.path.dirname(__file__), '..', f'/storage/{file_name}'))
+        os.remove(os.path.join(os.path.dirname(__file__), '..', 'storage', {file_name}))
     except FileNotFoundError:
         pass
 
