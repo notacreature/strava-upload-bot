@@ -1,4 +1,4 @@
-import configparser
+import os, configparser
 from http import server
 from socketserver import BaseServer, TCPServer
 from tinydb import TinyDB, Query
