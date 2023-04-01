@@ -3,8 +3,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, constan
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 from tinydb import TinyDB, Query
 
+path = os.path.join(os.path.dirname(__file__), '..', 'settings.ini')
 config = configparser.ConfigParser()
-config.read('./settings.ini')
+config.read(path)
 
 
 #TODO Добавить обработку команды для удаления user'а из базы

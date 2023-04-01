@@ -3,8 +3,9 @@ from http import server
 from socketserver import BaseServer, TCPServer
 from tinydb import TinyDB, Query
 
+path = os.path.join(os.path.dirname(__file__), '..', 'settings.ini')
 config = configparser.ConfigParser()
-config.read('./settings.ini')
+config.read(path)
 
 #Создаем свой класс обработчика запросов, наследуя от SimpleHTTPRequestHandler
 class MyHTTPRequestHandler(server.SimpleHTTPRequestHandler):
