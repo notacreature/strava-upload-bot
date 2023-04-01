@@ -7,6 +7,7 @@ path = os.path.join(os.path.dirname(__file__), '..', 'settings.ini')
 config = configparser.ConfigParser()
 config.read(path)
 
+
 #Создаем свой класс обработчика запросов, наследуя от SimpleHTTPRequestHandler
 class MyHTTPRequestHandler(server.SimpleHTTPRequestHandler):
     #Переопределяем метод do_GET()
@@ -27,7 +28,7 @@ class MyHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         
         #TODO Баг: если база пуста, вызов if возвращает ошибку, потому что в ней нет ключа 'user_id'
         #Сохраняем параметры в хранилище
-        path = os.path.join(os.path.dirname(__file__), '..', 'storage/userdata.json')
+        path = os.path.join(os.path.dirname(__file__), '..', '/storage/userdata.json')
         db = TinyDB(path)
         user = Query()
         if db.contains(user['user_id'] == params['user_id']):
