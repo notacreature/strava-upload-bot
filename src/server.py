@@ -8,7 +8,7 @@ config.read(os.path.join(os.path.dirname(__file__), '..', 'settings.ini'))
 
 
 #Создаем свой класс обработчика запросов, наследуя от SimpleHTTPRequestHandler
-class MyHTTPRequestHandler(server.SimpleHTTPRequestHandler):
+class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
     #Переопределяем метод do_GET()
     def do_GET(self):
         #Получаем путь и параметры запроса
@@ -36,7 +36,7 @@ class MyHTTPRequestHandler(server.SimpleHTTPRequestHandler):
 
 #Создаем объект сервера, используя класс TCPServer из модуля socketserver
 port = int(config['Server']['PORT'])
-my_server = TCPServer(("", port), MyHTTPRequestHandler)
+my_server = TCPServer(("", port), ParamsHTTPRequestHandler)
 
 #Выводим информацию о запуске сервера
 print(f"HTTP server running on port {port}")
