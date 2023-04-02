@@ -2,15 +2,9 @@
 # TODO Добавить зависимость команд /start и /help от наличия юзера в базе
 
 import os, requests, aiofiles, configparser
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, constants
 from tinydb import TinyDB, Query
-from telegram.ext import (
-    ApplicationBuilder,
-    ContextTypes,
-    CommandHandler,
-    MessageHandler,
-    filters,
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, constants
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 config = configparser.ConfigParser()
 config.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
@@ -21,8 +15,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     client_id = config["Strava"]["CLIENT_ID"]
     redirect_uri = config["Server"]["URL"]
-    inline_button = InlineKeyboardButton("Перейти к Strava", url=f"http://www.strava.com/oauth/authorize?client_id={client_id}&response_type=code&scope=activity:write&redirect_uri={redirect_uri}?user_id={user_id}")
-    inline_keyboard = InlineKeyboardMarkup([[inline_button]])
+    inline_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Перейти к Strava", url=f"http://www.strava.com/oauth/authorize?client_id={client_id}&response_type=code&scope=activity:write&redirect_uri={redirect_uri}?user_id={user_id}")]])
     await update.message.reply_text("Привет! Я помогу вам опубликовать активность в Strava.\nДля начала, разрешите мне загружать файлы в Strava от вашего имени 👇", reply_markup=inline_keyboard)
 
 
@@ -34,7 +27,7 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"""Как публиковать активность в Strava с помощью бота:\n
     1. Перейдите по ссылке [https://www.strava.com/oauth](http://www.strava.com/oauth/authorize?client_id={client_id}&response_type=code&scope=activity:write&redirect_uri={redirect_uri}?user_id={user_id})
     2. В открывшемся окне нажмите *Разрешить*
-    3. Пришлите в чат файл формата `.fit`, `.tcx` или `.gpx`
+    3. Пришлите в чат файл `.fit`, `.tcx` или `.gpx`
     4. Бот автоматически опубликует вашу активность"""
     await update.message.reply_text(text, constants.ParseMode.MARKDOWN)
 
@@ -91,15 +84,18 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with aiofiles.open(os.path.join(os.path.dirname(__file__), "..", "storage", file_name), "rb") as bytes:
         file = await bytes.read()
     url = "https://www.strava.com/api/v3/uploads"
-    params = {"data_type": file_name.split(".")[-1], "activity_type": "run"}
-    headers = {"Authorization": f"Bearer {bearer}"}
-    files = {"file": file}
+    params = {
+        "data_type": file_name.split(".")[-1],
+        "activity_type": "run"
+    }
+    headers = {
+        "Authorization": f"Bearer {bearer}"
+    }
+    files = {
+        "file": file
+    }
     response = requests.post(url, params=params, headers=headers, files=files)
-    if response.status_code == 201:
-        upload_id = response.json()["id_str"]
-    else:
-        await update.message.reply_text(f'Не удалось загрузить активность 🥵\nДетали: `{response.json()["errors"]}`', constants.ParseMode.MARKDOWN)
-        return
+    upload_id = response.json()["id_str"]
     
     # Проверка статуса загрузки
     url = f"https://www.strava.com/api/v3/uploads/{upload_id}"
@@ -115,8 +111,7 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if response.json()["status"] == statuses["wait"]:
             pass
         elif response.json()["status"] == statuses["ready"]:
-            inline_button = InlineKeyboardButton("Посмотреть", url=f'https://www.strava.com/activities/{response.json()["activity_id"]}')
-            inline_keyboard = InlineKeyboardMarkup([[inline_button]])
+            inline_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Посмотреть", url=f'https://www.strava.com/activities/{response.json()["activity_id"]}')]])
             await update.message.reply_text("Активность опубликована 👌", reply_markup=inline_keyboard)
             break
         elif response.json()["status"] == statuses["error"]:
@@ -138,8 +133,8 @@ def main():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help))
-    application.add_handler(MessageHandler(filters.TEXT, other))
-    application.add_handler(MessageHandler(filters.ATTACHMENT, upload_activity))
+    application.add_handler(MessageHandler(~filters.COMMAND & ~filters.Document.FileExtension("fit") & ~filters.Document.FileExtension("tcx") & ~filters.Document.FileExtension("gpx"), other))
+    application.add_handler(MessageHandler(filters.Document.FileExtension("fit") | filters.Document.FileExtension("tcx") | filters.Document.FileExtension("gpx"), upload_activity))
 
     application.run_polling()
 
