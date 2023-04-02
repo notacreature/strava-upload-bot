@@ -111,7 +111,7 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text('Активность опубликована 👌', reply_markup=inline_keyboard)
             break
         elif (response.json()['activity_id'] == None) & (response.json()['error'] != None):
-            await update.message.reply_text(f'Не удалось загрузить активность 🥵\n`{response.json()["error"]}`', constants.ParseMode.MARKDOWN)
+            await update.message.reply_text(f'Не удалось загрузить активность 🥵\n`Детали: {response.json()["error"]}`', constants.ParseMode.MARKDOWN)
             break
     
     try:
