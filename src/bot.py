@@ -83,13 +83,9 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "refresh_token": refresh_token,
     }
     response = requests.post(url, params=params)
-    if response.status_code == 200:
-        bearer = response.json()["access_token"]
-        refresh_token = response.json()["refresh_token"]
-        db.update({"refresh_token": refresh_token}, user["user_id"] == user_id)
-    else:
-        await update.message.reply_text(f'Не удалось загрузить активность 🥵\nДетали: `{response.json()["errors"]}`', constants.ParseMode.MARKDOWN)
-        return
+    bearer = response.json()["access_token"]
+    refresh_token = response.json()["refresh_token"]
+    db.update({"refresh_token": refresh_token}, user["user_id"] == user_id)
 
     # Загрузка файла в Strava
     async with aiofiles.open(os.path.join(os.path.dirname(__file__), "..", "storage", file_name), "rb") as bytes:
@@ -99,8 +95,12 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     headers = {"Authorization": f"Bearer {bearer}"}
     files = {"file": file}
     response = requests.post(url, params=params, headers=headers, files=files)
-    upload_id = response.json()["id_str"]
-
+    if response.status_code == 201:
+        upload_id = response.json()["id_str"]
+    else:
+        await update.message.reply_text(f'Не удалось загрузить активность 🥵\nДетали: `{response.json()["errors"]}`', constants.ParseMode.MARKDOWN)
+        return
+    
     # Проверка статуса загрузки
     url = f"https://www.strava.com/api/v3/uploads/{upload_id}"
     headers = {"Authorization": f"Bearer {bearer}"}
