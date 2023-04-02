@@ -1,3 +1,6 @@
+#TODO Добавить обработку команды для удаления user'а из базы
+#TODO Добавить зависимость команд /star и /help от наличия юзера в базе
+
 import os, requests, aiofiles, configparser
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, constants
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
@@ -6,9 +9,6 @@ from tinydb import TinyDB, Query
 config = configparser.ConfigParser()
 config.read(os.path.join(os.path.dirname(__file__), '..', 'settings.ini'))
 
-
-#TODO Добавить обработку команды для удаления user'а из базы
-#TODO Добавить зависимость команд /star и /help от наличия юзера в базе
 
 #Обработка /start; Вывод приветствия
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
