@@ -1,4 +1,3 @@
 venv
-*.gpx
-userdata.json
+storage
 settings.ini
