@@ -25,7 +25,7 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     client_id = config['Strava']['CLIENT_ID']
     redirect_uri = config['Server']['URL']
-    text = f'''Как публиковать активность в Strava с помощью этого бота:
+    text = f'''Как публиковать активность в Strava с помощью бота:
     1. Перейдите по ссылке [https://www.strava.com/oauth](http://www.strava.com/oauth/authorize?client_id={client_id}&response_type=code&scope=activity:write&redirect_uri={redirect_uri}?user_id={user_id})
     2. В открывшемся окне нажмите *Разрешить*
     3. Пришлите в чат файл формата `.fit`, `.tcx` или `.gpx`
