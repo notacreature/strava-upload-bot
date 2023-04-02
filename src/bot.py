@@ -15,10 +15,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     client_id = config['Strava']['CLIENT_ID']
     redirect_uri = config['Server']['URL']
-    inline_button = InlineKeyboardButton("Перейти к Strava", url=f'http://www.strava.com/oauth/authorize?client_id={client_id}&response_type=code&scope=activity:write&redirect_uri={redirect_uri}?user_id={user_id}')
-    inline_keyboard= InlineKeyboardMarkup([[inline_button]])
+    inline_button = InlineKeyboardButton('Перейти к Strava', url=f'http://www.strava.com/oauth/authorize?client_id={client_id}&response_type=code&scope=activity:write&redirect_uri={redirect_uri}?user_id={user_id}')
+    inline_keyboard = InlineKeyboardMarkup([[inline_button]])
     await update.message.reply_text('Привет! Я помогу вам опубликовать активность в Strava.\nДля начала, разрешите мне загружать файлы в Strava от вашего имени 👇', reply_markup=inline_keyboard)
-    await update.message.reply_text('После того, как я получу разрешение, пришлите мне в чат файл в формате `.gpx` и я опубликую активность 🏃‍♂️🏃‍♀️', constants.ParseMode.MARKDOWN)
 
 
 #Обработка /help; Вывод информационного сообщения
@@ -27,9 +26,9 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     client_id = config['Strava']['CLIENT_ID']
     redirect_uri = config['Server']['URL']
     text = f'''Как публиковать активность в Strava с помощью этого бота:
-    1. Перейдите по ссылке [https://www.strava.com](http://www.strava.com/oauth/authorize?client_id={client_id}&response_type=code&scope=activity:write&redirect_uri={redirect_uri}?user_id={user_id})
+    1. Перейдите по ссылке [https://www.strava.com/oauth](http://www.strava.com/oauth/authorize?client_id={client_id}&response_type=code&scope=activity:write&redirect_uri={redirect_uri}?user_id={user_id})
     2. В открывшемся окне нажмите *Разрешить*
-    3. Пришлите в чат файл формата `.gpx`
+    3. Пришлите в чат файл формата `.fit`, `.tcx` или `.gpx`
     4. Бот автоматически опубликует вашу активность'''
     await update.message.reply_text(text, constants.ParseMode.MARKDOWN)
 
@@ -72,10 +71,10 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     #Получение access_token и обновление refresh_token
     url = f'https://www.strava.com/api/v3/oauth/token'
     params = {
-        'client_id': f'{client_id}',
-        'client_secret': f'{client_secret}',
+        'client_id': client_id,
+        'client_secret': client_secret,
         'grant_type': 'refresh_token',
-        'refresh_token': f'{refresh_token}'
+        'refresh_token': refresh_token
         }
     response = requests.post(url, params=params)
     bearer = response.json()['access_token']
@@ -87,7 +86,7 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file = await bytes.read()
     url = 'https://www.strava.com/api/v3/uploads'
     params = {
-        'data_type': 'gpx',
+        'data_type': file_name.split('.')[-1],
         'activity_type': 'run'
         }
     headers = {
@@ -98,18 +97,22 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
     response = requests.post(url, params=params, headers=headers, files=files)
     upload_id = response.json()['id_str']
-    
+
     #Проверка статуса загрузки
     url = f'https://www.strava.com/api/v3/uploads/{upload_id}'
     headers = {
         'Authorization': f'Bearer {bearer}'
         }
-    
     while True:
         response = requests.get(url, headers=headers)
-        if response.json()['status'] != 'Your activity is still being processed.':
+        if (response.json()['activity_id'] != None) & (response.json()['error'] == None):
+            inline_button = InlineKeyboardButton('Посмотреть', url=f'https://www.strava.com/activities/{response.json()["activity_id"]}')
+            inline_keyboard = InlineKeyboardMarkup([[inline_button]])
+            await update.message.reply_text('Активность опубликована 👌', reply_markup=inline_keyboard)
             break
-    await update.message.reply_text(response.json()['status'])
+        elif (response.json()['activity_id'] == None) & (response.json()['error'] != None):
+            await update.message.reply_text(f'Не удалось загрузить активность 🥵\n`{response.json()["error"]}`', constants.ParseMode.MARKDOWN)
+            break
     
     try:
         os.remove(os.path.join(os.path.dirname(__file__), '..', 'storage', file_name))

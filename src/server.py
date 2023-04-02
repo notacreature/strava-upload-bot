@@ -1,4 +1,4 @@
-import os, configparser
+import os, configparser, requests
 from http import server
 from socketserver import BaseServer, TCPServer
 from tinydb import TinyDB, Query
@@ -25,7 +25,17 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         self.send_header('Location', url)
         self.end_headers()
         
+        #Отвечаем в чат
+        url = f'https://api.telegram.org/bot{config["Telegram"]["BOT_TOKEN"]}/sendMessage'
+        params = {
+            'chat_id': params['user_id'],
+            'text': 'Отлично! Теперь я могу загружать активности в Strava.\nПрисылайте мне файлы `.fit`, `.tcx` или `.gpx` и я буду их публиковать 🚴‍♂️🏃‍♀️',
+            'parse_mode': 'Markdown'
+            }
+        requests.post(url, params=params)
+        
         #TODO Баг: если база пуста, вызов if возвращает ошибку, потому что в ней нет ключа 'user_id'
+        #TODO Предусмотреть отмену галочки при выдаче доступа приложению
         #Сохраняем параметры в хранилище
         db = TinyDB(os.path.join(os.path.dirname(__file__), '..', 'storage', 'userdata.json'))
         user = Query()
@@ -34,9 +44,10 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         else:
             db.insert({'user_id': params['user_id'], 'auth_code': params['code']})
 
+
 #Создаем объект сервера, используя класс TCPServer из модуля socketserver
 port = int(config['Server']['PORT'])
-my_server = TCPServer(("", port), ParamsHTTPRequestHandler)
+my_server = TCPServer(('', port), ParamsHTTPRequestHandler)
 
 #Выводим информацию о запуске сервера
 print(f"HTTP server running on port {port}")
