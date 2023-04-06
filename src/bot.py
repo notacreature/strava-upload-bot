@@ -41,17 +41,22 @@ async def other(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Обработка получения файла; вход в ConversationHandler и получение инфы о файле
 async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.message.from_user.id)
     file_id = update.message.document.file_id
     file_data = await context.bot.get_file(file_id)
     context.user_data['file_name'] = update.message.document.file_name
     context.user_data['file_path'] = file_data.file_path
-    activity_names = {
-        "0": "По умолчанию",
-        "1": "Побегал",
-        "2": "Дорога домой",
-        "3": "Парковая в Дубае"
-    }
-    name_keyboard = ReplyKeyboardMarkup([[(value) for key, value in activity_names.items()]], resize_keyboard=True, one_time_keyboard=True, input_field_placeholder="Имя активности")
+    db = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
+    user = Query()
+    
+    activity_names = ['🗨']
+    try:
+        for name in db.get(user["user_id"] == user_id)["activity_names"]:
+            activity_names.append(name)
+    except KeyError:
+        pass
+    
+    name_keyboard = ReplyKeyboardMarkup([[(name) for name in activity_names]], resize_keyboard=True, one_time_keyboard=True, input_field_placeholder="Имя активности")
     await update.message.reply_text("🤖 Введите или выберите имя и я опубликую активность.", reply_markup=name_keyboard)
     
     return 'upload'
@@ -72,7 +77,7 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     client_secret = config["Strava"]["CLIENT_SECRET"]
     db = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
     user = Query()
-
+        
     # Попытка получить refresh_token из хранилки; при неуспехе получаем от API
     try:
         refresh_token = db.get(user["user_id"] == user_id)["refresh_token"]
@@ -111,16 +116,17 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = "https://www.strava.com/api/v3/uploads"
     params = {
         "sport_type": "run",
-        "name": activity_name,
         "description": "Опубликовано с помощью https://t.me/StravaUploadActivityBot",
         "data_type": context.user_data['file_name'].split(".")[-1],        
-    }
+    }  
     headers = {
         "Authorization": f"Bearer {access_token}"
     }
     files = {
         "file": file
     }
+    if activity_name != '🗨':
+        params.update({"name": activity_name})      
     response = requests.post(url, params=params, headers=headers, files=files)
     upload_id = response.json()["id_str"]
     
@@ -149,11 +155,28 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif response.json()["status"] == statuses["deleted"]:
             await update.message.reply_text(f'Не удалось загрузить активность 💢\nДетали: `{response.json()["status"]}`', constants.ParseMode.MARKDOWN, reply_markup=ReplyKeyboardRemove())
             break
-
+        
+    # Очистка хранилки
     try:
         os.remove(os.path.join(os.path.dirname(__file__), "..", "storage", context.user_data['file_name']))
     except FileNotFoundError:
         pass
+    
+    # Обновление списка последних имен Активности
+    activity_names = []
+    try:
+        for name in db.get(user["user_id"] == user_id)["activity_names"]:
+            activity_names.append(name)
+        if (activity_name not in activity_names) & (activity_name != "🗨"):
+            activity_names.append(activity_name)
+            if len(activity_names) > 3:
+                activity_names.pop(0)
+        db.update({"activity_names": activity_names}, user["user_id"] == user_id)
+    except KeyError:
+        if activity_name != "🗨":
+            activity_names.append(activity_name)
+            db.update({"activity_names": activity_names}, user["user_id"] == user_id)
+
     
     return ConversationHandler.END
 
