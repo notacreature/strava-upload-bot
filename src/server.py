@@ -37,7 +37,7 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         url = (f'https://api.telegram.org/bot{config["Telegram"]["BOT_TOKEN"]}/sendMessage')
         params = {
             "chat_id": incoming_params["user_id"],
-            "text": "Отлично! Теперь я могу загружать активности в Strava.\nПрисылайте мне файлы `.fit`, `.tcx` или `.gpx` и я буду их публиковать 🚴‍♂️🏃‍♀️",
+            "text": "🤖 Отлично! Теперь я могу загружать активность в Strava.\nПришлите мне файл `.fit`, `.tcx` или `.gpx` и я его опубликую.",
             "parse_mode": "Markdown",
         }
         requests.post(url, params=params)
