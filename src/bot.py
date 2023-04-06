@@ -27,10 +27,10 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     redirect_uri = config["Server"]["URL"]
     help_text = f"""🤖 Как помочь мне помочь вам опубликовать активность в Strava:\n
 *1.* Откройте Strava по ссылке [https://www.strava.com/oauth](http://www.strava.com/oauth/authorize?client_id={client_id}&response_type=code&scope=activity:write&redirect_uri={redirect_uri}?user_id={user_id}).
-*2.* В открывшемся окне нажмите *Разрешить*, это позволит мне загружать файлы в ваш профиль.
-*3.* Пришлите в чат файл формата `.fit`, `.tcx` или `.gpx`.
-*4.* Введите название для своей активности или выберите одно из последних; команда `\cancel` отменит публикацию.
-*5.* Я опубликую вашу активность с выбранным именем."""
+*2.* В открывшемся окне нажмите *Разрешить* – это позволит мне загружать файлы в ваш профиль.
+*3.* Пришлите мне файл формата `.fit`, `.tcx` или `.gpx`.
+*4.* Введите имя активности, выберите одно из последних или нажмите 🗨, чтобы задать имя по умолчанию; команда `\cancel` отменит публикацию.
+*5.* Ждите, я опубликую вашу активность в Strava."""
     await update.message.reply_text(help_text, constants.ParseMode.MARKDOWN)
 
 
@@ -57,7 +57,7 @@ async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
     
     name_keyboard = ReplyKeyboardMarkup([[(name) for name in activity_names]], resize_keyboard=True, one_time_keyboard=True, input_field_placeholder="Имя активности")
-    await update.message.reply_text("🤖 Введите или выберите имя и я опубликую активность.", reply_markup=name_keyboard)
+    await update.message.reply_text("🤖 Введите имя активности и я её опубликую.", reply_markup=name_keyboard)
     
     return 'upload'
 
@@ -176,8 +176,7 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if activity_name != "🗨":
             activity_names.append(activity_name)
             db.update({"activity_names": activity_names}, user["user_id"] == user_id)
-
-    
+            
     return ConversationHandler.END
 
 
