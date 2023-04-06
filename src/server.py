@@ -28,16 +28,13 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         # Сохраняем параметры в хранилище
         db = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
         user = Query()
-        if db.contains(user["user_id"] == incoming_params["user_id"]):
-            db.update({"auth_code": incoming_params["code"]}, user["user_id"] == incoming_params["user_id"])
-        else:
-            db.insert({"user_id": incoming_params["user_id"], "auth_code": incoming_params["code"]})
+        db.upsert({"user_id": incoming_params["user_id"], "auth_code": incoming_params["code"]}, user["user_id"] == incoming_params["user_id"])
 
         # Отвечаем в чат об успехе
         url = (f'https://api.telegram.org/bot{config["Telegram"]["BOT_TOKEN"]}/sendMessage')
         params = {
             "chat_id": incoming_params["user_id"],
-            "text": "Отлично! Теперь я могу загружать активности в Strava.\nПрисылайте мне файлы `.fit`, `.tcx` или `.gpx` и я буду их публиковать 🚴‍♂️🏃‍♀️",
+            "text": "🤖 Отлично! Теперь я могу загружать активность в Strava.\nПришлите мне файл `.fit`, `.tcx` или `.gpx` и я его опубликую.",
             "parse_mode": "Markdown",
         }
         requests.post(url, params=params)
