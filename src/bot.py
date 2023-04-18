@@ -1,5 +1,7 @@
-# TODO Добавить обработку команды для удаления user'а из базы
-# TODO Добавить зависимость команд /start и /help от наличия юзера в базе
+# TODO Доработка: добавить команду удаления данных пользователя из базы
+# TODO Доработка: добавить зависимость команд /start, /help и /delete от наличия юзера в базе
+# TODO Доработка: добавить возможность выбрать спорт по умолчанию
+# TODO Доработка: добавить возможность выбрать спорт во время залива
 # TODO Баг: после успешной загрузки не удаляется ReplyKeyboard
 
 import os, requests, aiofiles, configparser
@@ -11,7 +13,7 @@ config = configparser.ConfigParser()
 config.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
 
 
-# Обработка /start; вывод приветствия
+# Обработка команды /start: вывод приветствия
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     client_id = config["Strava"]["CLIENT_ID"]
@@ -20,7 +22,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🤖 Привет! Я помогу вам опубликовать активность в Strava.\nДля начала, разрешите мне загружать файлы в ваш профиль Strava.", reply_markup=inline_keyboard)
 
 
-# Обработка /help; вывод информационного сообщения
+# Обработка команды /help: вывод информационного сообщения
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     client_id = config["Strava"]["CLIENT_ID"]
@@ -34,24 +36,42 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_text, constants.ParseMode.MARKDOWN)
 
 
-# Обработка прочего текста
+# Обработка команды /cancel: отмена текущего диалога ConversationHandler
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Публикация отменена ↩️", constants.ParseMode.MARKDOWN, reply_markup=ReplyKeyboardRemove())
+    
+    return ConversationHandler.END
+
+
+# Обработка команды /delete: удаление данных пользователя из userdata.json
+async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    inline_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Да, удали 🗑", url="google.com"), InlineKeyboardButton("Нет, оставь ✋", url="google.com")]])
+    await update.message.reply_text("🤖 Оу. Такого я не ожидал. Вы точно хотите, чтобы я удалил все ваши данные?", reply_markup=inline_keyboard)
+    user_db = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
+    user_query = Query()
+    
+    user_db.remove(user_query["user_id"] == user_id)
+
+
+# Необработка прочего текста
 async def other(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🤖 К сожалению, я не знаю, что на это ответить.\nПопробуйте ввести команду `/help`.", constants.ParseMode.MARKDOWN)
 
 
-# Обработка получения файла; вход в ConversationHandler и получение инфы о файле
-async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Получение файла и вход в диалог upload_dialog загрузки активности
+async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     file_id = update.message.document.file_id
     file_data = await context.bot.get_file(file_id)
-    context.user_data['file_name'] = update.message.document.file_name
-    context.user_data['file_path'] = file_data.file_path
-    db = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
-    user = Query()
+    context.user_data["file_name"] = update.message.document.file_name
+    context.user_data["file_path"] = file_data.file_path
+    user_db = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
+    user_query = Query()
     
-    activity_names = ['🗨']
+    activity_names = ["🗨"]
     try:
-        for name in db.get(user["user_id"] == user_id)["activity_names"]:
+        for name in user_db.get(user_query["user_id"] == user_id)["activity_names"]:
             activity_names.append(name)
     except KeyError:
         pass
@@ -59,30 +79,23 @@ async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name_keyboard = ReplyKeyboardMarkup([[(name) for name in activity_names]], resize_keyboard=True, one_time_keyboard=True, input_field_placeholder="Имя активности")
     await update.message.reply_text("🤖 Введите имя активности и я её опубликую.", reply_markup=name_keyboard)
     
-    return 'upload'
+    return "upload_finish"
 
 
-# Обработка состояния 'cancel' ConversationHandler'а; отмена публикации
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Публикация отменена ↩️", constants.ParseMode.MARKDOWN, reply_markup=ReplyKeyboardRemove())
-    
-    return ConversationHandler.END
-
-
-# Обработка состояния 'upload' ConversationHandler'а; публикация активности
-async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Состояние upload_finish диалога upload_dialog: публикация активности и завершение диалога
+async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     activity_name = update.message.text
     client_id = config["Strava"]["CLIENT_ID"]
     client_secret = config["Strava"]["CLIENT_SECRET"]
-    db = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
-    user = Query()
+    user_db = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
+    user_query = Query()
         
     # Попытка получить refresh_token из хранилки; при неуспехе получаем от API
     try:
-        refresh_token = db.get(user["user_id"] == user_id)["refresh_token"]
+        refresh_token = user_db.get(user_query["user_id"] == user_id)["refresh_token"]
     except (IndexError, KeyError):
-        code = db.get(user["user_id"] == user_id)["auth_code"]
+        code = user_db.get(user_query["user_id"] == user_id)["auth_code"]
         url = f"https://www.strava.com/api/v3/oauth/token"
         params = {
             "client_id": f"{client_id}",
@@ -104,20 +117,20 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = requests.post(url, params=params)
     access_token = response.json()["access_token"]
     refresh_token = response.json()["refresh_token"]
-    db.update({"refresh_token": refresh_token}, user["user_id"] == user_id)
+    user_db.update({"refresh_token": refresh_token}, user_query["user_id"] == user_id)
 
     # Получение файла из API Telegram и запись в хранилку
-    async with aiofiles.open(os.path.join(os.path.dirname(__file__), "..", "storage", context.user_data['file_name']), "wb") as bytes:
-        await bytes.write(requests.get(context.user_data['file_path']).content)
+    async with aiofiles.open(os.path.join(os.path.dirname(__file__), "..", "storage", context.user_data["file_name"]), "wb") as bytes:
+        await bytes.write(requests.get(context.user_data["file_path"]).content)
 
     # Загрузка файла в Strava
-    async with aiofiles.open(os.path.join(os.path.dirname(__file__), "..", "storage", context.user_data['file_name']), "rb") as bytes:
+    async with aiofiles.open(os.path.join(os.path.dirname(__file__), "..", "storage", context.user_data["file_name"]), "rb") as bytes:
         file = await bytes.read()
     url = "https://www.strava.com/api/v3/uploads"
     params = {
         "sport_type": "run",
         "description": "Опубликовано с помощью https://t.me/StravaUploadActivityBot",
-        "data_type": context.user_data['file_name'].split(".")[-1],        
+        "data_type": context.user_data["file_name"].split(".")[-1],        
     }  
     headers = {
         "Authorization": f"Bearer {access_token}"
@@ -125,7 +138,7 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     files = {
         "file": file
     }
-    if activity_name != '🗨':
+    if activity_name != "🗨":
         params.update({"name": activity_name})      
     response = requests.post(url, params=params, headers=headers, files=files)
     upload_id = response.json()["id_str"]
@@ -146,36 +159,36 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if response.json()["status"] == statuses["wait"]:
             pass
         elif response.json()["status"] == statuses["ready"]:
-            inline_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Посмотреть", url=f'https://www.strava.com/activities/{response.json()["activity_id"]}')]])
+            inline_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Посмотреть", url=f"https://www.strava.com/activities/{response.json()['activity_id']}")]])
             await update.message.reply_text("Активность опубликована 🏆", reply_markup=inline_keyboard)
             break
         elif response.json()["status"] == statuses["error"]:
-            await update.message.reply_text(f'Не удалось загрузить активность 💢\nДетали: `{response.json()["error"]}`', constants.ParseMode.MARKDOWN, reply_markup=ReplyKeyboardRemove())
+            await update.message.reply_text(f"Не удалось загрузить активность 💢\nДетали: `{response.json()['error']}`", constants.ParseMode.MARKDOWN, reply_markup=ReplyKeyboardRemove())
             break
         elif response.json()["status"] == statuses["deleted"]:
-            await update.message.reply_text(f'Не удалось загрузить активность 💢\nДетали: `{response.json()["status"]}`', constants.ParseMode.MARKDOWN, reply_markup=ReplyKeyboardRemove())
+            await update.message.reply_text(f"Не удалось загрузить активность 💢\nДетали: `{response.json()['status']}`", constants.ParseMode.MARKDOWN, reply_markup=ReplyKeyboardRemove())
             break
         
     # Очистка хранилки
     try:
-        os.remove(os.path.join(os.path.dirname(__file__), "..", "storage", context.user_data['file_name']))
+        os.remove(os.path.join(os.path.dirname(__file__), "..", "storage", context.user_data["file_name"]))
     except FileNotFoundError:
         pass
     
     # Обновление списка последних имен Активности
     activity_names = []
     try:
-        for name in db.get(user["user_id"] == user_id)["activity_names"]:
+        for name in user_db.get(user_query["user_id"] == user_id)["activity_names"]:
             activity_names.append(name)
         if (activity_name not in activity_names) & (activity_name != "🗨"):
             activity_names.append(activity_name)
             if len(activity_names) > 3:
                 activity_names.pop(0)
-        db.update({"activity_names": activity_names}, user["user_id"] == user_id)
+        user_db.update({"activity_names": activity_names}, user_query["user_id"] == user_id)
     except KeyError:
         if activity_name != "🗨":
             activity_names.append(activity_name)
-            db.update({"activity_names": activity_names}, user["user_id"] == user_id)
+            user_db.update({"activity_names": activity_names}, user_query["user_id"] == user_id)
             
     return ConversationHandler.END
 
@@ -184,15 +197,16 @@ def main():
     token = config["Telegram"]["BOT_TOKEN"]
     application = ApplicationBuilder().token(token).build()
     upload_dialog = ConversationHandler(
-        entry_points=[MessageHandler(filters.Document.FileExtension("fit") | filters.Document.FileExtension("tcx") | filters.Document.FileExtension("gpx"), get_file)],
+        entry_points=[MessageHandler(filters.Document.FileExtension("fit") | filters.Document.FileExtension("tcx") | filters.Document.FileExtension("gpx"), upload_start)],
         states={
-            "upload": [MessageHandler(~filters.COMMAND & filters.TEXT, upload_activity)]
+            "upload_finish": [MessageHandler(~filters.COMMAND & filters.TEXT, upload_finish)]
         },
-        fallbacks=[CommandHandler('cancel', cancel)]
+        fallbacks=[CommandHandler("cancel", cancel)]
     )
     application.add_handler(upload_dialog)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help))
+    application.add_handler(CommandHandler("delete", delete))
     application.add_handler(MessageHandler(~filters.COMMAND & ~filters.Document.FileExtension("fit") & ~filters.Document.FileExtension("tcx") & ~filters.Document.FileExtension("gpx"), other))
 
     application.run_polling()
