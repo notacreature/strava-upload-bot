@@ -38,20 +38,25 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Обработка команды /cancel: отмена текущего диалога ConversationHandler
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Публикация отменена ↩️", constants.ParseMode.MARKDOWN, reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("Действие отменено ↩️", constants.ParseMode.MARKDOWN, reply_markup=ReplyKeyboardRemove())
     
     return ConversationHandler.END
 
 
 # Обработка команды /delete: удаление данных пользователя из userdata.json
-async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    inline_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("Да, удали 🗑", url="google.com"), InlineKeyboardButton("Нет, оставь ✋", url="google.com")]])
-    await update.message.reply_text("🤖 Оу. Такого я не ожидал. Вы точно хотите, чтобы я удалил все ваши данные?", reply_markup=inline_keyboard)
+async def delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🤖 ТЕКСТ ПРО УДАЛЕНИЕ. ДЛЯ ПОДТВЕРДИТЬ `/delete`, ДЛЯ ОТМЕНИТЬ `/cancel`", constants.ParseMode.MARKDOWN)
+    
+    return "delete_finish"
+
+async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.message.from_user.id)
     user_db = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
     user_query = Query()
     
     user_db.remove(user_query["user_id"] == user_id)
+    
+    return ConversationHandler.END
 
 
 # Необработка прочего текста
@@ -196,6 +201,13 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     token = config["Telegram"]["BOT_TOKEN"]
     application = ApplicationBuilder().token(token).build()
+    delete_dialog = ConversationHandler(
+        entry_points=[CommandHandler("delete", delete_start)],
+        states={
+            "delete_finish": [CommandHandler("delete", delete_finish)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)]
+    )
     upload_dialog = ConversationHandler(
         entry_points=[MessageHandler(filters.Document.FileExtension("fit") | filters.Document.FileExtension("tcx") | filters.Document.FileExtension("gpx"), upload_start)],
         states={
@@ -204,9 +216,9 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)]
     )
     application.add_handler(upload_dialog)
+    application.add_handler(delete_dialog)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help))
-    application.add_handler(CommandHandler("delete", delete))
     application.add_handler(MessageHandler(~filters.COMMAND & ~filters.Document.FileExtension("fit") & ~filters.Document.FileExtension("tcx") & ~filters.Document.FileExtension("gpx"), other))
 
     application.run_polling()
