@@ -11,6 +11,7 @@ config.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
 
 # Создаем класс обработчика запросов, наследуя от SimpleHTTPRequestHandler
 class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
+    
     # Переопределяем метод do_GET() на парсинг входящего url
     def do_GET(self):
         path = self.path
