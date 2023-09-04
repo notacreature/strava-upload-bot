@@ -9,7 +9,6 @@ config.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
 
 # Создаем класс обработчика запросов, наследуя от SimpleHTTPRequestHandler
 class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
-    
     # Переопределяем метод do_GET() на парсинг входящего url
     def do_GET(self):
         path = self.path
@@ -25,12 +24,24 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         self.end_headers()
 
         # Сохраняем параметры в хранилище
-        user_db = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
+        user_db = TinyDB(
+            os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
+        )
         user_query = Query()
-        user_db.upsert({"user_id": incoming_params["user_id"], "scope": incoming_params["scope"], "auth_code": incoming_params["code"]}, user_query["user_id"] == incoming_params["user_id"])
+        user_db.upsert(
+            {
+                "user_id": incoming_params["user_id"],
+                "scope": incoming_params["scope"],
+                "auth_code": incoming_params["code"],
+                "favorites": [],
+            },
+            user_query["user_id"] == incoming_params["user_id"],
+        )
 
         # Отвечаем в чат об успехе
-        url = (f"https://api.telegram.org/bot{config['Telegram']['BOT_TOKEN']}/sendMessage")
+        url = (
+            f"https://api.telegram.org/bot{config['Telegram']['BOT_TOKEN']}/sendMessage"
+        )
         params = {
             "chat_id": incoming_params["user_id"],
             "text": "🤖 Отлично! Теперь я могу загружать вашу активность в Strava.\nПришлите мне файл `.fit`, `.tcx` или `.gpx` и я его опубликую.",

@@ -1,6 +1,6 @@
-# TODO Доработка: заменить последние названия активностей на Избранные
-# TODO Доработка: добавить проверку корректности scope'ов
-# TODO Доработка: добавить зависимость команд /start, /help и /delete от наличия юзера в базе
+# WIP Доработка: добавить проверку корректности scope'ов (готова функция)
+# DONE Доработка: добавить зависимость команд /start, /help и /delete от наличия юзера в базе
+# TODO Проверить и обновить текстовки
 # TODO Рефакторинг по замечаниям Мити
 # TODO Баг: после успешной загрузки не удаляется ReplyKeyboard
 
@@ -23,15 +23,58 @@ from telegram.ext import (
     filters,
 )
 
-config = configparser.ConfigParser()
-config.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
+
+def user_exists(user_id: str) -> bool:
+    user_db = TinyDB(
+        os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
+    )
+    user_query = Query()
+    user = user_db.search(user_query["user_id"] == user_id)
+    if user:
+        return True
+    else:
+        return False
+
+
+def check_scopes(user_id: str) -> bool:
+    user_db = TinyDB(
+        os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
+    )
+    user_query = Query()
+    if not user_exists(user_id):
+        return False
+    else:
+        scope = user_db.get(user_query["user_id"] == user_id)["scope"]
+        if "activity:write" in scope:
+            return True
+        else:
+            return False
+
+
+def favorites_exists(user_id: str) -> bool:
+    user_db = TinyDB(
+        os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
+    )
+    user_query = Query()
+    if not user_exists(user_id):
+        return False
+    else:
+        favorites = user_db.get(user_query["user_id"] == user_id)["favorites"]
+        if favorites:
+            return True
+        else:
+            return False
+
+
+CONFIG = configparser.ConfigParser()
+CONFIG.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
 
 
 # Обработка команды /start: вывод приветствия
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    client_id = config["Strava"]["CLIENT_ID"]
-    redirect_uri = config["Server"]["URL"]
+    user_id = str(update.message.from_user.id)
+    client_id = CONFIG["Strava"]["CLIENT_ID"]
+    redirect_uri = CONFIG["Server"]["URL"]
     inline_keyboard = InlineKeyboardMarkup(
         [
             [
@@ -42,22 +85,30 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
         ]
     )
-    await update.message.reply_text(
-        "🤖 Привет! Я помогу вам опубликовать активность в Strava.\nДля начала, разрешите мне загружать файлы в ваш профиль Strava.",
-        reply_markup=inline_keyboard,
-    )
+    if not user_exists(user_id):
+        await update.message.reply_text(
+            "🤖 Привет! Я помогу вам опубликовать активность в Strava.\nДля начала, разрешите мне загружать файлы в ваш профиль Strava.",
+            constants.ParseMode.MARKDOWN,
+            reply_markup=inline_keyboard,
+        )
+    else:
+        await update.message.reply_text(
+            "🤖 этот сидит там чешет колоду блядь",
+            constants.ParseMode.MARKDOWN,
+            reply_markup=inline_keyboard,
+        )
 
 
 # Обработка команды /help: вывод информационного сообщения
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    client_id = config["Strava"]["CLIENT_ID"]
-    redirect_uri = config["Server"]["URL"]
+    user_id = str(update.message.from_user.id)
+    client_id = CONFIG["Strava"]["CLIENT_ID"]
+    redirect_uri = CONFIG["Server"]["URL"]
     help_text = f"""🤖 Как помочь мне помочь вам опубликовать активность в Strava:\n
 *1.* Откройте Strava по ссылке [https://www.strava.com/oauth](http://www.strava.com/oauth/authorize?client_id={client_id}&response_type=code&scope=activity:write&redirect_uri={redirect_uri}?user_id={user_id}).
 *2.* В открывшемся окне нажмите *Разрешить* – это позволит мне загружать файлы в ваш профиль.
 *3.* Пришлите мне файл формата `.fit`, `.tcx` или `.gpx`.
-*4.* Введите имя активности, выберите одно из последних или нажмите 💬, чтобы задать имя по умолчанию; команда `\cancel` отменит публикацию.
+*4.* Введите имя активности, выберите одно из последних или нажмите 💬, чтобы задать имя по умолчанию; команда /cancel отменит публикацию.
 *5.* Ждите, я опубликую вашу активность в Strava."""
     await update.message.reply_text(help_text, constants.ParseMode.MARKDOWN)
 
@@ -69,16 +120,59 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         constants.ParseMode.MARKDOWN,
         reply_markup=ReplyKeyboardRemove(),
     )
+    return ConversationHandler.END
+
+
+# Обработка команды /favorites
+async def favorites_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.message.from_user.id)
+    if not user_exists(user_id):
+        await update.message.reply_text(
+            "🤖 ты кто такой сука?",
+            constants.ParseMode.MARKDOWN,
+        )
+        return
+    if not favorites_exists(user_id):
+        await update.message.reply_text(
+            "🤖 какого хуя они в другом порядке разложены?",
+            constants.ParseMode.MARKDOWN,
+        )
+    else:
+        await update.message.reply_text(
+            "🤖 Введите до 3 названий через запятую и я их запомню",
+            constants.ParseMode.MARKDOWN,
+        )
+    return "favorites_finish"
+
+
+async def favorites_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.message.from_user.id)
+    user_db = TinyDB(
+        os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
+    )
+    user_query = Query()
+    favorites = update.message.text.split(",")[:3]
+    for fav in favorites:
+        fav.strip()
+    user_db.upsert({"favorites": favorites}, user_query["user_id"] == user_id)
 
     return ConversationHandler.END
 
 
 # Обработка команды /delete: удаление данных пользователя из userdata.json
 async def delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🤖 Вы точно хотите чтобы я удалил все данные о вас? Я не смогу загружать ваши файлы пока вы снова не авторизуете меня в Strava.\nДля подтверждения повторите команду `/delete`, для отмены введите `/cancel`.",
-        constants.ParseMode.MARKDOWN,
-    )
+    user_id = str(update.message.from_user.id)
+    if not user_exists(user_id):
+        await update.message.reply_text(
+            "🤖 ты кто такой сука? чтоб это сделать?",
+            constants.ParseMode.MARKDOWN,
+        )
+        return
+    else:
+        await update.message.reply_text(
+            "🤖 Вы точно хотите чтобы я удалил все ваши данные? Я не смогу публиковать файлы пока вы снова не авторизуете меня в Strava.\nДля подтверждения повторите /delete, для отмены введите /cancel.",
+            constants.ParseMode.MARKDOWN,
+        )
 
     return "delete_finish"
 
@@ -92,7 +186,7 @@ async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_db.remove(user_query["user_id"] == user_id)
     await update.message.reply_text(
-        "🤖 Готово, я вас больше не знаю.",
+        "🤖 Готово, я вас больше не помню.",
         constants.ParseMode.MARKDOWN,
     )
 
@@ -102,7 +196,7 @@ async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Необработка прочего текста
 async def other(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 К сожалению, я не знаю, что на это ответить.\nПопробуйте ввести команду `/help`.",
+        "🤖 К сожалению, я не знаю, что на это ответить.\nПопробуйте ввести команду /help.",
         constants.ParseMode.MARKDOWN,
     )
 
@@ -119,21 +213,24 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     user_query = Query()
 
-    activity_names = ["💬"]
-    try:
-        for name in user_db.get(user_query["user_id"] == user_id)["activity_names"]:
-            activity_names.append(name)
-    except KeyError:
-        pass
+    activity_keys = ["💬"]
+    if not favorites_exists:
+        return
+    else:
+        activity_keys = user_db.get(user_query["user_id"] == user_id)[
+            "favorites"
+        ].insert(0, "💬")
 
-    name_keyboard = ReplyKeyboardMarkup(
-        [[(name) for name in activity_names]],
+    activity_keyboard = ReplyKeyboardMarkup(
+        [activity_keys],
         resize_keyboard=True,
         one_time_keyboard=True,
         input_field_placeholder="Имя активности",
     )
     await update.message.reply_text(
-        "🤖 Введите имя активности и я её опубликую.", reply_markup=name_keyboard
+        "🤖 Введите имя активности и я её опубликую.",
+        constants.ParseMode.MARKDOWN,
+        reply_markup=activity_keyboard,
     )
 
     return "upload_finish"
@@ -143,8 +240,8 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     activity_name = update.message.text
-    client_id = config["Strava"]["CLIENT_ID"]
-    client_secret = config["Strava"]["CLIENT_SECRET"]
+    client_id = CONFIG["Strava"]["CLIENT_ID"]
+    client_secret = CONFIG["Strava"]["CLIENT_SECRET"]
     user_db = TinyDB(
         os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
     )
@@ -232,7 +329,9 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]
             )
             await update.message.reply_text(
-                "Активность опубликована 🏆", reply_markup=inline_keyboard
+                "Активность опубликована 🏆",
+                constants.ParseMode.MARKDOWN,
+                reply_markup=inline_keyboard,
             )
             break
         elif response.json()["status"] == statuses["error"]:
@@ -263,34 +362,20 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except FileNotFoundError:
         pass
 
-    # Обновление списка последних имен Активности
-    activity_names = []
-    try:
-        for name in user_db.get(user_query["user_id"] == user_id)["activity_names"]:
-            activity_names.append(name)
-        if (activity_name not in activity_names) & (activity_name != "💬"):
-            activity_names.append(activity_name)
-            if len(activity_names) > 3:
-                activity_names.pop(0)
-        user_db.update(
-            {"activity_names": activity_names}, user_query["user_id"] == user_id
-        )
-    except KeyError:
-        if activity_name != "💬":
-            activity_names.append(activity_name)
-            user_db.update(
-                {"activity_names": activity_names}, user_query["user_id"] == user_id
-            )
-
     return ConversationHandler.END
 
 
 def main():
-    token = config["Telegram"]["BOT_TOKEN"]
+    token = CONFIG["Telegram"]["BOT_TOKEN"]
     application = ApplicationBuilder().token(token).build()
     delete_dialog = ConversationHandler(
         entry_points=[CommandHandler("delete", delete_start)],
         states={"delete_finish": [CommandHandler("delete", delete_finish)]},
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    favorites_dialog = ConversationHandler(
+        entry_points=[CommandHandler("favorites", favorites_start)],
+        states={"favorites_finish": [MessageHandler(filters.TEXT, favorites_finish)]},
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     upload_dialog = ConversationHandler(
@@ -311,6 +396,7 @@ def main():
     )
     application.add_handler(upload_dialog)
     application.add_handler(delete_dialog)
+    application.add_handler(favorites_dialog)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help))
     application.add_handler(
