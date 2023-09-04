@@ -2,6 +2,7 @@
 # DONE Доработка: добавить зависимость команд /start, /help и /delete от наличия юзера в базе
 # TODO Проверить и обновить текстовки
 # TODO Рефакторинг по замечаниям Мити
+# TODO Добавить постэкшон
 # TODO Баг: после успешной загрузки не удаляется ReplyKeyboard
 
 import os, requests, aiofiles, configparser
@@ -23,13 +24,16 @@ from telegram.ext import (
     filters,
 )
 
+CONFIG = configparser.ConfigParser()
+CONFIG.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
+USER_QUERY = Query()
+USER_DB = TinyDB(
+    os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
+)
+
 
 def user_exists(user_id: str) -> bool:
-    user_db = TinyDB(
-        os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
-    )
-    user_query = Query()
-    user = user_db.search(user_query["user_id"] == user_id)
+    user = USER_DB.search(USER_QUERY["user_id"] == user_id)
     if user:
         return True
     else:
@@ -37,14 +41,10 @@ def user_exists(user_id: str) -> bool:
 
 
 def check_scopes(user_id: str) -> bool:
-    user_db = TinyDB(
-        os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
-    )
-    user_query = Query()
     if not user_exists(user_id):
         return False
     else:
-        scope = user_db.get(user_query["user_id"] == user_id)["scope"]
+        scope = USER_DB.get(USER_QUERY["user_id"] == user_id)["scope"]
         if "activity:write" in scope:
             return True
         else:
@@ -52,22 +52,14 @@ def check_scopes(user_id: str) -> bool:
 
 
 def favorites_exists(user_id: str) -> bool:
-    user_db = TinyDB(
-        os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
-    )
-    user_query = Query()
     if not user_exists(user_id):
         return False
     else:
-        favorites = user_db.get(user_query["user_id"] == user_id)["favorites"]
+        favorites = USER_DB.get(USER_QUERY["user_id"] == user_id)["favorites"]
         if favorites:
             return True
         else:
             return False
-
-
-CONFIG = configparser.ConfigParser()
-CONFIG.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
 
 
 # Обработка команды /start: вывод приветствия
@@ -147,15 +139,10 @@ async def favorites_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def favorites_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
-    user_db = TinyDB(
-        os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
-    )
-    user_query = Query()
     favorites = update.message.text.split(",")[:3]
     for fav in favorites:
         fav.strip()
-    user_db.upsert({"favorites": favorites}, user_query["user_id"] == user_id)
-
+    USER_DB.upsert({"favorites": favorites}, USER_QUERY["user_id"] == user_id)
     return ConversationHandler.END
 
 
@@ -173,23 +160,17 @@ async def delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🤖 Вы точно хотите чтобы я удалил все ваши данные? Я не смогу публиковать файлы пока вы снова не авторизуете меня в Strava.\nДля подтверждения повторите /delete, для отмены введите /cancel.",
             constants.ParseMode.MARKDOWN,
         )
-
     return "delete_finish"
 
 
 async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
-    user_db = TinyDB(
-        os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
-    )
-    user_query = Query()
 
-    user_db.remove(user_query["user_id"] == user_id)
+    USER_DB.remove(USER_QUERY["user_id"] == user_id)
     await update.message.reply_text(
         "🤖 Готово, я вас больше не помню.",
         constants.ParseMode.MARKDOWN,
     )
-
     return ConversationHandler.END
 
 
@@ -208,18 +189,13 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_data = await context.bot.get_file(file_id)
     context.user_data["file_name"] = update.message.document.file_name
     context.user_data["file_path"] = file_data.file_path
-    user_db = TinyDB(
-        os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
-    )
-    user_query = Query()
 
     activity_keys = ["💬"]
     if not favorites_exists:
         return
     else:
-        activity_keys = user_db.get(user_query["user_id"] == user_id)[
-            "favorites"
-        ].insert(0, "💬")
+        activity_keys = USER_DB.get(USER_QUERY["user_id"] == user_id)["favorites"]
+        activity_keys.insert(0, "💬")
 
     activity_keyboard = ReplyKeyboardMarkup(
         [activity_keys],
@@ -232,7 +208,6 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         constants.ParseMode.MARKDOWN,
         reply_markup=activity_keyboard,
     )
-
     return "upload_finish"
 
 
@@ -242,16 +217,12 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     activity_name = update.message.text
     client_id = CONFIG["Strava"]["CLIENT_ID"]
     client_secret = CONFIG["Strava"]["CLIENT_SECRET"]
-    user_db = TinyDB(
-        os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
-    )
-    user_query = Query()
 
     # Попытка получить refresh_token из хранилки; при неуспехе получаем от API
     try:
-        refresh_token = user_db.get(user_query["user_id"] == user_id)["refresh_token"]
+        refresh_token = USER_DB.get(USER_QUERY["user_id"] == user_id)["refresh_token"]
     except (IndexError, KeyError):
-        code = user_db.get(user_query["user_id"] == user_id)["auth_code"]
+        code = USER_DB.get(USER_QUERY["user_id"] == user_id)["auth_code"]
         url = f"https://www.strava.com/api/v3/oauth/token"
         params = {
             "client_id": f"{client_id}",
@@ -273,7 +244,7 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = requests.post(url, params=params)
     access_token = response.json()["access_token"]
     refresh_token = response.json()["refresh_token"]
-    user_db.update({"refresh_token": refresh_token}, user_query["user_id"] == user_id)
+    USER_DB.update({"refresh_token": refresh_token}, USER_QUERY["user_id"] == user_id)
 
     # Получение файла из API Telegram и запись в хранилку
     async with aiofiles.open(

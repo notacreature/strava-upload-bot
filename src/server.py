@@ -3,8 +3,8 @@ from http import server
 from socketserver import BaseServer, TCPServer
 from tinydb import TinyDB, Query
 
-config = configparser.ConfigParser()
-config.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
+CONFIG = configparser.ConfigParser()
+CONFIG.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
 
 
 # Создаем класс обработчика запросов, наследуя от SimpleHTTPRequestHandler
@@ -13,7 +13,7 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
     def do_GET(self):
         path = self.path
         incoming_params = {}
-        url = config["Telegram"]["BOT_URL"]
+        url = CONFIG["Telegram"]["BOT_URL"]
         if "?" in path:
             path, query = path.split("?", 1)
             for pair in query.split("&"):
@@ -40,7 +40,7 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
 
         # Отвечаем в чат об успехе
         url = (
-            f"https://api.telegram.org/bot{config['Telegram']['BOT_TOKEN']}/sendMessage"
+            f"https://api.telegram.org/bot{CONFIG['Telegram']['BOT_TOKEN']}/sendMessage"
         )
         params = {
             "chat_id": incoming_params["user_id"],
@@ -51,6 +51,6 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
 
 
 # Создаем и запускаем TCPServer
-port = int(config["Server"]["PORT"])
+port = int(CONFIG["Server"]["PORT"])
 tcp_server = TCPServer(("", port), ParamsHTTPRequestHandler)
 BaseServer.serve_forever(tcp_server)
