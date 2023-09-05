@@ -1,8 +1,9 @@
-# WIP Доработка: добавить проверку корректности scope'ов (готова функция)
+# WIP Доработка: добавить проверку корректности scopes (готова функция)
 # DONE Доработка: добавить зависимость команд /start, /help и /delete от наличия юзера в базе
 # TODO Проверить и обновить текстовки
-# TODO Рефакторинг по замечаниям Мити
-# TODO Добавить постэкшон
+# WIP Рефакторинг по замечаниям Мити
+# TODO Добавить пост-действия
+# TODO Вынесениие текста в константы + i18n?
 # TODO Баг: после успешной загрузки не удаляется ReplyKeyboard
 
 import os, requests, aiofiles, configparser
@@ -26,10 +27,20 @@ from telegram.ext import (
 
 CONFIG = configparser.ConfigParser()
 CONFIG.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
+TOKEN = CONFIG["Telegram"]["BOT_TOKEN"]
+CLIENT_ID = CONFIG["Strava"]["CLIENT_ID"]
+CLIENT_SECRET = CONFIG["Strava"]["CLIENT_SECRET"]
+REDIRECT_URI = CONFIG["Server"]["URL"]
 USER_QUERY = Query()
 USER_DB = TinyDB(
     os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
 )
+STATUSES = {
+    "ready": "Your activity is ready.",
+    "wait": "Your activity is still being processed.",
+    "deleted": "The created activity has been deleted.",
+    "error": "There was an error processing your activity.",
+}
 
 
 def user_exists(user_id: str) -> bool:
@@ -65,14 +76,12 @@ def favorites_exists(user_id: str) -> bool:
 # Обработка команды /start: вывод приветствия
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
-    client_id = CONFIG["Strava"]["CLIENT_ID"]
-    redirect_uri = CONFIG["Server"]["URL"]
     inline_keyboard = InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton(
                     "Открыть Strava 🔑",
-                    url=f"http://www.strava.com/oauth/authorize?client_id={client_id}&response_type=code&scope=activity:write&redirect_uri={redirect_uri}?user_id={user_id}",
+                    url=f"http://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&response_type=code&scope=activity:write&redirect_uri={REDIRECT_URI}?user_id={user_id}",
                 )
             ]
         ]
@@ -94,10 +103,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Обработка команды /help: вывод информационного сообщения
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
-    client_id = CONFIG["Strava"]["CLIENT_ID"]
-    redirect_uri = CONFIG["Server"]["URL"]
     help_text = f"""🤖 Как помочь мне помочь вам опубликовать активность в Strava:\n
-*1.* Откройте Strava по ссылке [https://www.strava.com/oauth](http://www.strava.com/oauth/authorize?client_id={client_id}&response_type=code&scope=activity:write&redirect_uri={redirect_uri}?user_id={user_id}).
+*1.* Откройте Strava по ссылке [https://www.strava.com/oauth](http://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&response_type=code&scope=activity:write&redirect_uri={REDIRECT_URI}?user_id={user_id}).
 *2.* В открывшемся окне нажмите *Разрешить* – это позволит мне загружать файлы в ваш профиль.
 *3.* Пришлите мне файл формата `.fit`, `.tcx` или `.gpx`.
 *4.* Введите имя активности, выберите одно из последних или нажмите 💬, чтобы задать имя по умолчанию; команда /cancel отменит публикацию.
@@ -215,8 +222,6 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     activity_name = update.message.text
-    client_id = CONFIG["Strava"]["CLIENT_ID"]
-    client_secret = CONFIG["Strava"]["CLIENT_SECRET"]
 
     # Попытка получить refresh_token из хранилки; при неуспехе получаем от API
     try:
@@ -225,8 +230,8 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         code = USER_DB.get(USER_QUERY["user_id"] == user_id)["auth_code"]
         url = f"https://www.strava.com/api/v3/oauth/token"
         params = {
-            "client_id": f"{client_id}",
-            "client_secret": f"{client_secret}",
+            "client_id": f"{CLIENT_ID}",
+            "client_secret": f"{CLIENT_SECRET}",
             "grant_type": "authorization_code",
             "code": f"{code}",
         }
@@ -236,8 +241,8 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Получение access_token от Strava и обновление refresh_token в хранилке
     url = f"https://www.strava.com/api/v3/oauth/token"
     params = {
-        "client_id": client_id,
-        "client_secret": client_secret,
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
     }
@@ -278,17 +283,11 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Проверка статуса загрузки
     url = f"https://www.strava.com/api/v3/uploads/{upload_id}"
     headers = {"Authorization": f"Bearer {access_token}"}
-    statuses = {
-        "ready": "Your activity is ready.",
-        "wait": "Your activity is still being processed.",
-        "deleted": "The created activity has been deleted.",
-        "error": "There was an error processing your activity.",
-    }
     while True:
         response = requests.get(url, headers=headers)
-        if response.json()["status"] == statuses["wait"]:
+        if response.json()["status"] == STATUSES["wait"]:
             pass
-        elif response.json()["status"] == statuses["ready"]:
+        elif response.json()["status"] == STATUSES["ready"]:
             inline_keyboard = InlineKeyboardMarkup(
                 [
                     [
@@ -305,14 +304,14 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=inline_keyboard,
             )
             break
-        elif response.json()["status"] == statuses["error"]:
+        elif response.json()["status"] == STATUSES["error"]:
             await update.message.reply_text(
                 f"Не удалось загрузить активность 💢\nДетали: `{response.json()['error']}`",
                 constants.ParseMode.MARKDOWN,
                 reply_markup=ReplyKeyboardRemove(),
             )
             break
-        elif response.json()["status"] == statuses["deleted"]:
+        elif response.json()["status"] == STATUSES["deleted"]:
             await update.message.reply_text(
                 f"Не удалось загрузить активность 💢\nДетали: `{response.json()['status']}`",
                 constants.ParseMode.MARKDOWN,
@@ -337,8 +336,7 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
-    token = CONFIG["Telegram"]["BOT_TOKEN"]
-    application = ApplicationBuilder().token(token).build()
+    application = ApplicationBuilder().token(TOKEN).build()
     delete_dialog = ConversationHandler(
         entry_points=[CommandHandler("delete", delete_start)],
         states={"delete_finish": [CommandHandler("delete", delete_finish)]},
