@@ -51,7 +51,7 @@ def user_exists(user_id: str) -> bool:
         return False
 
 
-def check_scopes(user_id: str) -> bool:
+def scopes_met(user_id: str) -> bool:
     if not user_exists(user_id):
         return False
     else:
