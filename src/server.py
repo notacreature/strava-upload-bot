@@ -5,6 +5,9 @@ from tinydb import TinyDB, Query
 
 CONFIG = configparser.ConfigParser()
 CONFIG.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
+BOT_URL = CONFIG["Telegram"]["BOT_URL"]
+TOKEN = CONFIG["Telegram"]["BOT_TOKEN"]
+PORT = CONFIG["Server"]["PORT"]
 
 
 # Создаем класс обработчика запросов, наследуя от SimpleHTTPRequestHandler
@@ -13,7 +16,7 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
     def do_GET(self):
         path = self.path
         incoming_params = {}
-        url = CONFIG["Telegram"]["BOT_URL"]
+        url = BOT_URL
         if "?" in path:
             path, query = path.split("?", 1)
             for pair in query.split("&"):
@@ -39,9 +42,7 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         )
 
         # Отвечаем в чат об успехе
-        url = (
-            f"https://api.telegram.org/bot{CONFIG['Telegram']['BOT_TOKEN']}/sendMessage"
-        )
+        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
         params = {
             "chat_id": incoming_params["user_id"],
             "text": "🤖 Отлично! Теперь я могу загружать вашу активность в Strava.\nПришлите мне файл `.fit`, `.tcx` или `.gpx` и я его опубликую.",
@@ -51,6 +52,5 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
 
 
 # Создаем и запускаем TCPServer
-port = int(CONFIG["Server"]["PORT"])
-tcp_server = TCPServer(("", port), ParamsHTTPRequestHandler)
+tcp_server = TCPServer(("", int(PORT)), ParamsHTTPRequestHandler)
 BaseServer.serve_forever(tcp_server)
