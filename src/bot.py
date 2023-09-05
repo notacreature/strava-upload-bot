@@ -249,7 +249,7 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = requests.post(url, params=params)
     access_token = response.json()["access_token"]
     refresh_token = response.json()["refresh_token"]
-    USER_DB.update({"refresh_token": refresh_token}, USER_QUERY["user_id"] == user_id)
+    USER_DB.update({"refresh_token": str(refresh_token)}, USER_QUERY["user_id"] == user_id)
 
     # Получение файла из API Telegram и запись в хранилку
     async with aiofiles.open(

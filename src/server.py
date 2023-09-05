@@ -5,9 +5,13 @@ from tinydb import TinyDB, Query
 
 CONFIG = configparser.ConfigParser()
 CONFIG.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
-BOT_URL = CONFIG["Telegram"]["BOT_URL"]
 TOKEN = CONFIG["Telegram"]["BOT_TOKEN"]
+BOT_URL = CONFIG["Telegram"]["BOT_URL"]
 PORT = CONFIG["Server"]["PORT"]
+USER_QUERY = Query()
+USER_DB = TinyDB(
+    os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
+)
 
 
 # Создаем класс обработчика запросов, наследуя от SimpleHTTPRequestHandler
@@ -27,18 +31,15 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         self.end_headers()
 
         # Сохраняем параметры в хранилище
-        user_db = TinyDB(
-            os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
-        )
-        user_query = Query()
-        user_db.upsert(
+
+        USER_DB.upsert(
             {
-                "user_id": incoming_params["user_id"],
-                "scope": incoming_params["scope"],
-                "auth_code": incoming_params["code"],
+                "user_id": str(incoming_params["user_id"]),
+                "scope": str(incoming_params["scope"]),
+                "auth_code": str(incoming_params["code"]),
                 "favorites": [],
             },
-            user_query["user_id"] == incoming_params["user_id"],
+            USER_QUERY["user_id"] == incoming_params["user_id"],
         )
 
         # Отвечаем в чат об успехе
