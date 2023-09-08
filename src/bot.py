@@ -1,11 +1,3 @@
-# DONE Доработка: добавить проверку корректности scopes (готова функция)
-# DONE Доработка: добавить зависимость команд /start, /help и /delete от наличия юзера в базе
-# TODO Проверить и обновить текстовки
-# WIP Рефакторинг по замечаниям Мити
-# TODO Вынесение текста в константы + i18n?
-# TODO Добавить пост-действия
-# TODO Баг: после успешной загрузки не удаляется ReplyKeyboard
-
 import os, requests, configparser
 from tinydb import TinyDB, Query
 from telegram import (
