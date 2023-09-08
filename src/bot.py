@@ -60,17 +60,6 @@ def scopes_met(user_id: str) -> bool:
             return False
 
 
-def favorites_exists(user_id: str) -> bool:
-    if not user_exists(user_id):
-        return False
-    else:
-        favorites = USER_DB.get(USER_QUERY["user_id"] == user_id)["favorites"]
-        if favorites:
-            return True
-        else:
-            return False
-
-
 async def get_strava_refresh_token(user_id: str) -> str:
     refresh_token = USER_DB.get(USER_QUERY["user_id"] == user_id)["refresh_token"]
     if not refresh_token:
@@ -195,6 +184,10 @@ async def favorites_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for fav in favorites:
         fav.strip()
     USER_DB.upsert({"favorites": favorites}, USER_QUERY["user_id"] == user_id)
+    await update.message.reply_text(
+        f"🤖 готово {favorites}",
+        constants.ParseMode.MARKDOWN,
+    )
     return ConversationHandler.END
 
 
@@ -255,11 +248,10 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["file_name"] = update.message.document.file_name
     context.user_data["file_path"] = file_data.file_path
 
-    if not favorites_exists(user_id):
-        activity_keys = []
-    else:
-        activity_keys = USER_DB.get(USER_QUERY["user_id"] == user_id)["favorites"]
-    activity_keys.insert(0, "💬")
+    activity_keys = ["⏩"]
+    favorites = USER_DB.get(USER_QUERY["user_id"] == user_id)["favorites"]
+    for fav in favorites:
+        activity_keys.append(fav)
     activity_keyboard = ReplyKeyboardMarkup(
         [activity_keys],
         resize_keyboard=True,
