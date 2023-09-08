@@ -9,9 +9,7 @@ TOKEN = CONFIG["Telegram"]["BOT_TOKEN"]
 BOT_URL = CONFIG["Telegram"]["BOT_URL"]
 PORT = CONFIG["Server"]["PORT"]
 USER_QUERY = Query()
-USER_DB = TinyDB(
-    os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
-)
+USER_DB = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
 
 
 # Создаем класс обработчика запросов, наследуя от SimpleHTTPRequestHandler
