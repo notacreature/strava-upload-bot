@@ -1,12 +1,12 @@
-# WIP Доработка: добавить проверку корректности scopes (готова функция)
+# DONE Доработка: добавить проверку корректности scopes (готова функция)
 # DONE Доработка: добавить зависимость команд /start, /help и /delete от наличия юзера в базе
 # TODO Проверить и обновить текстовки
 # WIP Рефакторинг по замечаниям Мити
-# TODO Вынесениие текста в константы + i18n?
+# TODO Вынесение текста в константы + i18n?
 # TODO Добавить пост-действия
 # TODO Баг: после успешной загрузки не удаляется ReplyKeyboard
 
-import os, requests, aiofiles, configparser
+import os, requests, configparser
 from tinydb import TinyDB, Query
 from telegram import (
     Update,
@@ -32,9 +32,7 @@ CLIENT_ID = CONFIG["Strava"]["CLIENT_ID"]
 CLIENT_SECRET = CONFIG["Strava"]["CLIENT_SECRET"]
 REDIRECT_URI = CONFIG["Server"]["URL"]
 USER_QUERY = Query()
-USER_DB = TinyDB(
-    os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
-)
+USER_DB = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
 STATUSES = {
     "ready": "Your activity is ready.",
     "wait": "Your activity is still being processed.",
@@ -71,6 +69,58 @@ def favorites_exists(user_id: str) -> bool:
             return True
         else:
             return False
+
+
+async def get_strava_refresh_token(user_id: str) -> str:
+    refresh_token = USER_DB.get(USER_QUERY["user_id"] == user_id)["refresh_token"]
+    if not refresh_token:
+        url = f"https://www.strava.com/api/v3/oauth/token"
+        code = USER_DB.get(USER_QUERY["user_id"] == user_id)["auth_code"]
+        params = {
+            "client_id": f"{CLIENT_ID}",
+            "client_secret": f"{CLIENT_SECRET}",
+            "grant_type": "authorization_code",
+            "code": f"{code}",
+        }
+        response = requests.post(url, params=params)
+        refresh_token = response.json()["refresh_token"]
+    return refresh_token
+
+
+async def get_strava_access_token(user_id: str, refresh_token: str) -> str:
+    url = f"https://www.strava.com/api/v3/oauth/token"
+    params = {
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+    }
+    response = requests.post(url, params=params)
+    refresh_token = response.json()["refresh_token"]
+    USER_DB.update({"refresh_token": str(refresh_token)}, USER_QUERY["user_id"] == user_id)
+    access_token = response.json()["access_token"]
+    return access_token
+
+
+async def upload_strava_activity(access_token: str, activity_name: str, data_type: str, file: bytes) -> str:
+    url = "https://www.strava.com/api/v3/uploads"
+    params = (
+        {
+            "name": activity_name,
+            "description": "t.me/StravaUploadActivityBot",
+            "data_type": data_type,
+        }
+        if activity_name != "💬"
+        else {
+            "description": "t.me/StravaUploadActivityBot",
+            "data_type": data_type,
+        }
+    )
+    headers = {"Authorization": f"Bearer {access_token}"}
+    files = {"file": file}
+    response = requests.post(url, params=params, headers=headers, files=files)
+    upload_id = response.json()["id_str"]
+    return upload_id
 
 
 # /start; регистрация
@@ -183,7 +233,7 @@ async def other(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# Получение файла; вывод избранных названий
+# Публикация активности
 async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
 
@@ -223,87 +273,29 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return "upload_finish"
 
-# Отправка активности в Strava
+
 async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     activity_name = update.message.text
+    refresh_token = await get_strava_refresh_token(user_id)
+    access_token = await get_strava_access_token(user_id, refresh_token)
+    data_type = context.user_data["file_name"].split(".")[-1]
+    file = requests.get(context.user_data["file_path"]).content
 
-    # Получаем refresh_token из БД; если пустой, получаем от API и обновляем в БД
-    refresh_token = USER_DB.get(USER_QUERY["user_id"] == user_id)["refresh_token"]
-    if not refresh_token:
-        code = USER_DB.get(USER_QUERY["user_id"] == user_id)["auth_code"]
-        url = f"https://www.strava.com/api/v3/oauth/token"
-        params = {
-            "client_id": f"{CLIENT_ID}",
-            "client_secret": f"{CLIENT_SECRET}",
-            "grant_type": "authorization_code",
-            "code": f"{code}",
-        }
-        response = requests.post(url, params=params)
-        refresh_token = response.json()["refresh_token"]
+    upload_id = await upload_strava_activity(access_token, activity_name, data_type, file)
 
-    # Получение access_token от Strava и обновление refresh_token в БД
-    url = f"https://www.strava.com/api/v3/oauth/token"
-    params = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "grant_type": "refresh_token",
-        "refresh_token": refresh_token,
-    }
-    response = requests.post(url, params=params)
-    access_token = response.json()["access_token"]
-    refresh_token = response.json()["refresh_token"]
-    USER_DB.update(
-        {"refresh_token": str(refresh_token)}, USER_QUERY["user_id"] == user_id
-    )
-
-    # Получение файла из API Telegram и запись в хранилище
-    async with aiofiles.open(
-        os.path.join(
-            os.path.dirname(__file__), "..", "storage", context.user_data["file_name"]
-        ),
-        "wb",
-    ) as bytes:
-        await bytes.write(requests.get(context.user_data["file_path"]).content)
-
-    # Загрузка файла в Strava
-    async with aiofiles.open(
-        os.path.join(
-            os.path.dirname(__file__), "..", "storage", context.user_data["file_name"]
-        ),
-        "rb",
-    ) as bytes:
-        file = await bytes.read()
-    url = "https://www.strava.com/api/v3/uploads"
-    params = {
-        "description": "Опубликовано с помощью https://t.me/StravaUploadActivityBot",
-        "data_type": context.user_data["file_name"].split(".")[-1],
-    }
-    headers = {"Authorization": f"Bearer {access_token}"}
-    files = {"file": file}
-    if activity_name != "💬":
-        params.update({"name": activity_name})
-    response = requests.post(url, params=params, headers=headers, files=files)
-    upload_id = response.json()["id_str"]
-
-    # Проверка статуса загрузки
     url = f"https://www.strava.com/api/v3/uploads/{upload_id}"
     headers = {"Authorization": f"Bearer {access_token}"}
-    while True:
+    while True:  # Проверка статуса загрузки
         response = requests.get(url, headers=headers)
         if response.json()["status"] == STATUSES["wait"]:
-            pass
+            continue
         elif response.json()["status"] == STATUSES["ready"]:
-            inline_keyboard = InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton(
-                            "Посмотреть",
-                            url=f"https://www.strava.com/activities/{response.json()['activity_id']}",
-                        )
-                    ]
-                ]
+            inline_key = InlineKeyboardButton(
+                "Посмотреть",
+                url=f"https://www.strava.com/activities/{response.json()['activity_id']}",
             )
+            inline_keyboard = InlineKeyboardMarkup([[inline_key]])
             await update.message.reply_text(
                 "Активность опубликована 🏆",
                 constants.ParseMode.MARKDOWN,
@@ -324,19 +316,6 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=ReplyKeyboardRemove(),
             )
             break
-
-    # Очистка хранилища
-    try:
-        os.remove(
-            os.path.join(
-                os.path.dirname(__file__),
-                "..",
-                "storage",
-                context.user_data["file_name"],
-            )
-        )
-    except FileNotFoundError:
-        pass
 
     return ConversationHandler.END
 
@@ -362,11 +341,7 @@ def main():
                 upload_start,
             )
         ],
-        states={
-            "upload_finish": [
-                MessageHandler(~filters.COMMAND & filters.TEXT, upload_finish)
-            ]
-        },
+        states={"upload_finish": [MessageHandler(~filters.COMMAND & filters.TEXT, upload_finish)]},
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     application.add_handler(upload_dialog)
