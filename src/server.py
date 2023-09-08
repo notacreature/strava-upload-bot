@@ -30,13 +30,13 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         self.send_header("Location", url)
         self.end_headers()
 
-        # Сохраняем параметры в хранилище
-
+        # Создаём пользователя с полученными параметрами
         USER_DB.upsert(
             {
                 "user_id": str(incoming_params["user_id"]),
                 "scope": str(incoming_params["scope"]),
                 "auth_code": str(incoming_params["code"]),
+                "refresh_token": "",
                 "favorites": [],
             },
             USER_QUERY["user_id"] == incoming_params["user_id"],

@@ -2,8 +2,8 @@
 # DONE Доработка: добавить зависимость команд /start, /help и /delete от наличия юзера в базе
 # TODO Проверить и обновить текстовки
 # WIP Рефакторинг по замечаниям Мити
-# TODO Добавить пост-действия
 # TODO Вынесениие текста в константы + i18n?
+# TODO Добавить пост-действия
 # TODO Баг: после успешной загрузки не удаляется ReplyKeyboard
 
 import os, requests, aiofiles, configparser
@@ -73,7 +73,7 @@ def favorites_exists(user_id: str) -> bool:
             return False
 
 
-# Обработка команды /start: вывод приветствия
+# /start; регистрация
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     inline_keyboard = InlineKeyboardMarkup(
@@ -100,7 +100,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-# Обработка команды /help: вывод информационного сообщения
+# /help; справка
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     help_text = f"""🤖 Как помочь мне помочь вам опубликовать активность в Strava:\n
@@ -112,7 +112,7 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_text, constants.ParseMode.MARKDOWN)
 
 
-# Обработка команды /cancel: отмена текущего диалога ConversationHandler
+# /cancel; отмена диалога ConversationHandler
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Действие отменено ↩️",
@@ -122,7 +122,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-# Обработка команды /favorites
+# /favorites; создание списка избранных названий
 async def favorites_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     if not user_exists(user_id):
@@ -131,11 +131,6 @@ async def favorites_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             constants.ParseMode.MARKDOWN,
         )
         return
-    if not favorites_exists(user_id):
-        await update.message.reply_text(
-            "🤖 какого хуя они в другом порядке разложены?",
-            constants.ParseMode.MARKDOWN,
-        )
     else:
         await update.message.reply_text(
             "🤖 Введите до 3 названий через запятую и я их запомню",
@@ -153,12 +148,12 @@ async def favorites_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-# Обработка команды /delete: удаление данных пользователя из userdata.json
+# /delete; удаление данных пользователя из userdata.json
 async def delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     if not user_exists(user_id):
         await update.message.reply_text(
-            "🤖 ты кто такой сука? чтоб это сделать?",
+            "🤖 ты кто такой сука чтоб это сделать?",
             constants.ParseMode.MARKDOWN,
         )
         return
@@ -172,7 +167,6 @@ async def delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
-
     USER_DB.remove(USER_QUERY["user_id"] == user_id)
     await update.message.reply_text(
         "🤖 Готово, я вас больше не помню.",
@@ -181,7 +175,7 @@ async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-# Необработка прочего текста
+# Обработка прочего текста
 async def other(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🤖 К сожалению, я не знаю, что на это ответить.\nПопробуйте ввести команду /help.",
@@ -189,26 +183,38 @@ async def other(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# Получение файла и вход в диалог upload_dialog загрузки активности
+# Получение файла; вывод избранных названий
 async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
+
+    if not user_exists(user_id):
+        await update.message.reply_text(
+            "🤖 ты кто такой сука?",
+            constants.ParseMode.MARKDOWN,
+        )
+        return
+    elif not scopes_met(user_id):
+        await update.message.reply_text(
+            "🤖 ты кто такой сука чтоб это сделать?",
+            constants.ParseMode.MARKDOWN,
+        )
+        return
+
     file_id = update.message.document.file_id
     file_data = await context.bot.get_file(file_id)
     context.user_data["file_name"] = update.message.document.file_name
     context.user_data["file_path"] = file_data.file_path
 
-    activity_keys = ["💬"]
-    if not favorites_exists:
-        return
+    if not favorites_exists(user_id):
+        activity_keys = []
     else:
         activity_keys = USER_DB.get(USER_QUERY["user_id"] == user_id)["favorites"]
-        activity_keys.insert(0, "💬")
-
+    activity_keys.insert(0, "💬")
     activity_keyboard = ReplyKeyboardMarkup(
         [activity_keys],
         resize_keyboard=True,
         one_time_keyboard=True,
-        input_field_placeholder="Имя активности",
+        input_field_placeholder="Название активности",
     )
     await update.message.reply_text(
         "🤖 Введите имя активности и я её опубликую.",
@@ -217,16 +223,14 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return "upload_finish"
 
-
-# Состояние upload_finish диалога upload_dialog: публикация активности и завершение диалога
+# Отправка активности в Strava
 async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     activity_name = update.message.text
 
-    # Попытка получить refresh_token из хранилки; при неуспехе получаем от API
-    try:
-        refresh_token = USER_DB.get(USER_QUERY["user_id"] == user_id)["refresh_token"]
-    except (IndexError, KeyError):
+    # Получаем refresh_token из БД; если пустой, получаем от API и обновляем в БД
+    refresh_token = USER_DB.get(USER_QUERY["user_id"] == user_id)["refresh_token"]
+    if not refresh_token:
         code = USER_DB.get(USER_QUERY["user_id"] == user_id)["auth_code"]
         url = f"https://www.strava.com/api/v3/oauth/token"
         params = {
@@ -238,7 +242,7 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = requests.post(url, params=params)
         refresh_token = response.json()["refresh_token"]
 
-    # Получение access_token от Strava и обновление refresh_token в хранилке
+    # Получение access_token от Strava и обновление refresh_token в БД
     url = f"https://www.strava.com/api/v3/oauth/token"
     params = {
         "client_id": CLIENT_ID,
@@ -249,9 +253,11 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = requests.post(url, params=params)
     access_token = response.json()["access_token"]
     refresh_token = response.json()["refresh_token"]
-    USER_DB.update({"refresh_token": str(refresh_token)}, USER_QUERY["user_id"] == user_id)
+    USER_DB.update(
+        {"refresh_token": str(refresh_token)}, USER_QUERY["user_id"] == user_id
+    )
 
-    # Получение файла из API Telegram и запись в хранилку
+    # Получение файла из API Telegram и запись в хранилище
     async with aiofiles.open(
         os.path.join(
             os.path.dirname(__file__), "..", "storage", context.user_data["file_name"]
@@ -319,7 +325,7 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             break
 
-    # Очистка хранилки
+    # Очистка хранилища
     try:
         os.remove(
             os.path.join(
