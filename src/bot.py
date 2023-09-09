@@ -22,9 +22,9 @@ CONFIG.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
 TOKEN = CONFIG["Telegram"]["BOT_TOKEN"]
 CLIENT_ID = CONFIG["Strava"]["CLIENT_ID"]
 CLIENT_SECRET = CONFIG["Strava"]["CLIENT_SECRET"]
-REDIRECT_URI = CONFIG["Server"]["URL"]
-USER_QUERY = Query()
+REDIRECT_URL = CONFIG["Server"]["URL"]
 USER_DB = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
+USER_QUERY = Query()
 STATUSES = {
     "ready": "Your activity is ready.",
     "wait": "Your activity is still being processed.",
@@ -33,33 +33,33 @@ STATUSES = {
 }
 
 
-def user_exists(user_id: str) -> bool:
-    user = USER_DB.search(USER_QUERY["user_id"] == user_id)
+def user_exists(user_id: str, db: TinyDB, query: Query) -> bool:
+    user = db.search(query["user_id"] == user_id)
     if user:
         return True
     else:
         return False
 
 
-def scopes_met(user_id: str) -> bool:
-    if not user_exists(user_id):
+def scopes_valid(user_id: str, db: TinyDB, query: Query) -> bool:
+    if not user_exists(user_id, db, query):
         return False
     else:
-        scope = USER_DB.get(USER_QUERY["user_id"] == user_id)["scope"]
+        scope = db.get(query["user_id"] == user_id)["scope"]
         if "activity:write" in scope:
             return True
         else:
             return False
 
 
-async def get_strava_refresh_token(user_id: str) -> str:
-    refresh_token = USER_DB.get(USER_QUERY["user_id"] == user_id)["refresh_token"]
+async def get_strava_refresh_token(user_id: str, client_id: str, client_secret: str, db: TinyDB, query: Query) -> str:
+    refresh_token = db.get(query["user_id"] == user_id)["refresh_token"]
     if not refresh_token:
         url = f"https://www.strava.com/api/v3/oauth/token"
-        code = USER_DB.get(USER_QUERY["user_id"] == user_id)["auth_code"]
+        code = db.get(query["user_id"] == user_id)["auth_code"]
         params = {
-            "client_id": f"{CLIENT_ID}",
-            "client_secret": f"{CLIENT_SECRET}",
+            "client_id": f"{client_id}",
+            "client_secret": f"{client_secret}",
             "grant_type": "authorization_code",
             "code": f"{code}",
         }
@@ -68,17 +68,17 @@ async def get_strava_refresh_token(user_id: str) -> str:
     return refresh_token
 
 
-async def get_strava_access_token(user_id: str, refresh_token: str) -> str:
+async def get_strava_access_token(user_id: str, client_id: str, client_secret: str, refresh_token: str, db: TinyDB, query: Query) -> str:
     url = f"https://www.strava.com/api/v3/oauth/token"
     params = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
+        "client_id": client_id,
+        "client_secret": client_secret,
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
     }
     response = requests.post(url, params=params)
     refresh_token = response.json()["refresh_token"]
-    USER_DB.update({"refresh_token": str(refresh_token)}, USER_QUERY["user_id"] == user_id)
+    db.update({"refresh_token": str(refresh_token)}, query["user_id"] == user_id)
     access_token = response.json()["access_token"]
     return access_token
 
@@ -91,7 +91,7 @@ async def upload_strava_activity(access_token: str, activity_name: str, data_typ
             "description": "t.me/StravaUploadActivityBot",
             "data_type": data_type,
         }
-        if activity_name != "💬"
+        if activity_name != "⏩"
         else {
             "description": "t.me/StravaUploadActivityBot",
             "data_type": data_type,
@@ -105,19 +105,14 @@ async def upload_strava_activity(access_token: str, activity_name: str, data_typ
 
 
 # /start; регистрация
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update):
     user_id = str(update.message.from_user.id)
-    inline_keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    "Открыть Strava 🔑",
-                    url=f"http://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&response_type=code&scope=activity:write&redirect_uri={REDIRECT_URI}?user_id={user_id}",
-                )
-            ]
-        ]
+    inline_key = InlineKeyboardButton(
+        "Открыть Strava 🔑",
+        url=f"http://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&response_type=code&scope=activity:write&redirect_uri={REDIRECT_URL}?user_id={user_id}",
     )
-    if not user_exists(user_id):
+    inline_keyboard = InlineKeyboardMarkup([[inline_key]])
+    if not user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
             "🤖 Привет! Я помогу вам опубликовать активность в Strava.\nДля начала, разрешите мне загружать файлы в ваш профиль Strava.",
             constants.ParseMode.MARKDOWN,
@@ -131,32 +126,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-# /help; справка
-async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.message.from_user.id)
-    help_text = f"""🤖 Как помочь мне помочь вам опубликовать активность в Strava:\n
-*1.* Откройте Strava по ссылке [https://www.strava.com/oauth](http://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&response_type=code&scope=activity:write&redirect_uri={REDIRECT_URI}?user_id={user_id}).
-*2.* В открывшемся окне нажмите *Разрешить* – это позволит мне загружать файлы в ваш профиль.
-*3.* Пришлите мне файл формата `.fit`, `.tcx` или `.gpx`.
-*4.* Введите имя активности, выберите одно из последних или нажмите 💬, чтобы задать имя по умолчанию; команда /cancel отменит публикацию.
-*5.* Ждите, я опубликую вашу активность в Strava."""
-    await update.message.reply_text(help_text, constants.ParseMode.MARKDOWN)
-
-
-# /cancel; отмена диалога ConversationHandler
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Действие отменено ↩️",
-        constants.ParseMode.MARKDOWN,
-        reply_markup=ReplyKeyboardRemove(),
-    )
-    return ConversationHandler.END
-
-
 # /favorites; создание списка избранных названий
-async def favorites_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def favorites_start(update: Update):
     user_id = str(update.message.from_user.id)
-    if not user_exists(user_id):
+    if not user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
             "🤖 ты кто такой сука?",
             constants.ParseMode.MARKDOWN,
@@ -170,7 +143,7 @@ async def favorites_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return "favorites_finish"
 
 
-async def favorites_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def favorites_finish(update: Update):
     user_id = str(update.message.from_user.id)
     favorites = update.message.text.split(",")[:3]
     for fav in favorites:
@@ -184,9 +157,9 @@ async def favorites_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # /delete; удаление данных пользователя из userdata.json
-async def delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def delete_start(update: Update):
     user_id = str(update.message.from_user.id)
-    if not user_exists(user_id):
+    if not user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
             "🤖 ты кто такой сука чтоб это сделать?",
             constants.ParseMode.MARKDOWN,
@@ -200,7 +173,7 @@ async def delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return "delete_finish"
 
 
-async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def delete_finish(update: Update):
     user_id = str(update.message.from_user.id)
     USER_DB.remove(USER_QUERY["user_id"] == user_id)
     await update.message.reply_text(
@@ -210,25 +183,17 @@ async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-# Обработка прочего текста
-async def other(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🤖 К сожалению, я не знаю, что на это ответить.\nПопробуйте ввести команду /help.",
-        constants.ParseMode.MARKDOWN,
-    )
-
-
 # Публикация активности
 async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
 
-    if not user_exists(user_id):
+    if not user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
             "🤖 ты кто такой сука?",
             constants.ParseMode.MARKDOWN,
         )
         return
-    elif not scopes_met(user_id):
+    elif not scopes_valid(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
             "🤖 ты кто такой сука чтоб это сделать?",
             constants.ParseMode.MARKDOWN,
@@ -261,9 +226,9 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     activity_name = update.message.text
-    refresh_token = await get_strava_refresh_token(user_id)
-    access_token = await get_strava_access_token(user_id, refresh_token)
-    data_type = context.user_data["file_name"].split(".")[-1]
+    refresh_token = await get_strava_refresh_token(user_id, CLIENT_ID, CLIENT_SECRET, USER_DB, USER_QUERY)
+    access_token = await get_strava_access_token(user_id, CLIENT_ID, CLIENT_SECRET, refresh_token, USER_DB, USER_QUERY)
+    data_type = str.split(context.user_data["file_name"], ".")[-1]
     file = requests.get(context.user_data["file_path"]).content
 
     upload_id = await upload_strava_activity(access_token, activity_name, data_type, file)
@@ -300,8 +265,37 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=ReplyKeyboardRemove(),
             )
             break
-
     return ConversationHandler.END
+
+
+# /help; справка
+async def help(update: Update):
+    user_id = str(update.message.from_user.id)
+    help_text = f"""🤖 Как помочь мне помочь вам опубликовать активность в Strava:\n
+*1.* Откройте Strava по ссылке [https://www.strava.com/oauth](http://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&response_type=code&scope=activity:write&redirect_uri={REDIRECT_URL}?user_id={user_id}).
+*2.* В открывшемся окне нажмите *Разрешить* – это позволит мне загружать файлы в ваш профиль.
+*3.* Пришлите мне файл формата `.fit`, `.tcx` или `.gpx`.
+*4.* Введите имя активности, выберите одно из последних или нажмите 💬, чтобы задать имя по умолчанию; команда /cancel отменит публикацию.
+*5.* Ждите, я опубликую вашу активность в Strava."""
+    await update.message.reply_text(help_text, constants.ParseMode.MARKDOWN)
+
+
+# /cancel; отмена диалога ConversationHandler
+async def cancel(update: Update):
+    await update.message.reply_text(
+        "Действие отменено ↩️",
+        constants.ParseMode.MARKDOWN,
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    return ConversationHandler.END
+
+
+# Обработка прочего текста
+async def other(update: Update):
+    await update.message.reply_text(
+        "🤖 К сожалению, я не знаю, что на это ответить.\nПопробуйте ввести команду /help.",
+        constants.ParseMode.MARKDOWN,
+    )
 
 
 def main():
@@ -319,9 +313,7 @@ def main():
     upload_dialog = ConversationHandler(
         entry_points=[
             MessageHandler(
-                filters.Document.FileExtension("fit")
-                | filters.Document.FileExtension("tcx")
-                | filters.Document.FileExtension("gpx"),
+                filters.Document.FileExtension("fit") | filters.Document.FileExtension("tcx") | filters.Document.FileExtension("gpx"),
                 upload_start,
             )
         ],
@@ -335,10 +327,7 @@ def main():
     application.add_handler(CommandHandler("help", help))
     application.add_handler(
         MessageHandler(
-            ~filters.COMMAND
-            & ~filters.Document.FileExtension("fit")
-            & ~filters.Document.FileExtension("tcx")
-            & ~filters.Document.FileExtension("gpx"),
+            ~filters.COMMAND & ~filters.Document.FileExtension("fit") & ~filters.Document.FileExtension("tcx") & ~filters.Document.FileExtension("gpx"),
             other,
         )
     )
