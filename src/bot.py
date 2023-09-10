@@ -104,6 +104,15 @@ async def upload_strava_activity(access_token: str, activity_name: str, data_typ
     return upload_id
 
 
+async def get_strava_upload_status(upload_id: str, access_token: str, statuses: dict):
+    url = f"https://www.strava.com/api/v3/uploads/{upload_id}"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    while True:
+        upload = requests.get(url, headers=headers).json()
+        if upload["status"] != statuses["wait"]:
+            return upload
+
+
 # /start; регистрация
 async def start(update: Update):
     user_id = str(update.message.from_user.id)
@@ -226,6 +235,7 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     activity_name = update.message.text
+
     refresh_token = await get_strava_refresh_token(user_id, CLIENT_ID, CLIENT_SECRET, USER_DB, USER_QUERY)
     access_token = await get_strava_access_token(user_id, CLIENT_ID, CLIENT_SECRET, refresh_token, USER_DB, USER_QUERY)
     data_type = str.split(context.user_data["file_name"], ".")[-1]
@@ -233,38 +243,30 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     upload_id = await upload_strava_activity(access_token, activity_name, data_type, file)
 
-    url = f"https://www.strava.com/api/v3/uploads/{upload_id}"
-    headers = {"Authorization": f"Bearer {access_token}"}
-    while True:  # Проверка статуса загрузки
-        response = requests.get(url, headers=headers)
-        if response.json()["status"] == STATUSES["wait"]:
-            continue
-        elif response.json()["status"] == STATUSES["ready"]:
-            inline_key = InlineKeyboardButton(
-                "Посмотреть",
-                url=f"https://www.strava.com/activities/{response.json()['activity_id']}",
-            )
-            inline_keyboard = InlineKeyboardMarkup([[inline_key]])
-            await update.message.reply_text(
-                "Активность опубликована 🏆",
-                constants.ParseMode.MARKDOWN,
-                reply_markup=inline_keyboard,
-            )
-            break
-        elif response.json()["status"] == STATUSES["error"]:
-            await update.message.reply_text(
-                f"Не удалось загрузить активность 💢\nДетали: `{response.json()['error']}`",
-                constants.ParseMode.MARKDOWN,
-                reply_markup=ReplyKeyboardRemove(),
-            )
-            break
-        elif response.json()["status"] == STATUSES["deleted"]:
-            await update.message.reply_text(
-                f"Не удалось загрузить активность 💢\nДетали: `{response.json()['status']}`",
-                constants.ParseMode.MARKDOWN,
-                reply_markup=ReplyKeyboardRemove(),
-            )
-            break
+    upload = await get_strava_upload_status(upload_id, access_token, STATUSES)
+    if upload["status"] == STATUSES["ready"]:
+        inline_key = InlineKeyboardButton(
+            "Посмотреть",
+            url=f"https://www.strava.com/activities/{upload['activity_id']}",
+        )
+        inline_keyboard = InlineKeyboardMarkup([[inline_key]])
+        await update.message.reply_text(
+            "Активность опубликована 🏆",
+            constants.ParseMode.MARKDOWN,
+            reply_markup=inline_keyboard,
+        )
+    elif upload["status"] == STATUSES["error"]:
+        await update.message.reply_text(
+            f"Не удалось загрузить активность 💢\nДетали: `{upload['error']}`",
+            constants.ParseMode.MARKDOWN,
+            reply_markup=ReplyKeyboardRemove(),
+        )
+    elif upload["status"] == STATUSES["deleted"]:
+        await update.message.reply_text(
+            f"Не удалось загрузить активность 💢\nДетали: `{upload['status']}`",
+            constants.ParseMode.MARKDOWN,
+            reply_markup=ReplyKeyboardRemove(),
+        )
     return ConversationHandler.END
 
 
