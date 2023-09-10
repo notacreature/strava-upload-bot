@@ -9,9 +9,7 @@ TOKEN = CONFIG["Telegram"]["BOT_TOKEN"]
 BOT_URL = CONFIG["Telegram"]["BOT_URL"]
 PORT = CONFIG["Server"]["PORT"]
 USER_QUERY = Query()
-USER_DB = TinyDB(
-    os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json")
-)
+USER_DB = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
 
 
 # Создаем класс обработчика запросов, наследуя от SimpleHTTPRequestHandler
@@ -46,7 +44,7 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
         params = {
             "chat_id": incoming_params["user_id"],
-            "text": "🤖 Отлично! Теперь я могу загружать вашу активность в Strava.\nПришлите мне файл `.fit`, `.tcx` или `.gpx` и я его опубликую.",
+            "text": "🤖 Отлично! Я получил твое разрешение и готов работать. Просто пришли мне файл в формате `.fit`, `.tcx`, или `.gpx`, и я его опубликую.",
             "parse_mode": "Markdown",
         }
         requests.post(url, params=params)

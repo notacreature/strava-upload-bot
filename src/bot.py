@@ -123,13 +123,13 @@ async def start(update: Update):
     inline_keyboard = InlineKeyboardMarkup([[inline_key]])
     if not user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
-            "🤖 Привет! Я помогу вам опубликовать активность в Strava.\nДля начала, разрешите мне загружать файлы в ваш профиль Strava.",
+            "🤖 Привет! Я бот, который поможет тебе опубликовать твою активность в Strava. Для этого мне нужно получить твое разрешение на загрузку файлов в твой аккаунт. Нажми кнопку ниже, чтобы продолжить.",
             constants.ParseMode.MARKDOWN,
             reply_markup=inline_keyboard,
         )
     else:
         await update.message.reply_text(
-            "🤖 этот сидит там чешет колоду блядь",
+            "🤖 Мы уже знакомы. Но если ты хочешь переавторизовать меня в Strava, нажми кнопку ниже.",
             constants.ParseMode.MARKDOWN,
             reply_markup=inline_keyboard,
         )
@@ -140,13 +140,13 @@ async def favorites_start(update: Update):
     user_id = str(update.message.from_user.id)
     if not user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
-            "🤖 ты кто такой сука?",
+            "🤖 Прости, но я тебя пока не знаю. Чтобы я мог тебе помочь, сначала введи команду /start и выполни пару шагов.",
             constants.ParseMode.MARKDOWN,
         )
         return
     else:
         await update.message.reply_text(
-            "🤖 Введите до 3 названий через запятую и я их запомню",
+            "🤖 Введи до 3-х названий через запятую и я добавлю их в избранное.",
             constants.ParseMode.MARKDOWN,
         )
     return "favorites_finish"
@@ -159,7 +159,7 @@ async def favorites_finish(update: Update):
         fav.strip()
     USER_DB.upsert({"favorites": favorites}, USER_QUERY["user_id"] == user_id)
     await update.message.reply_text(
-        f"🤖 готово {favorites}",
+        f"🤖 Готово!",
         constants.ParseMode.MARKDOWN,
     )
     return ConversationHandler.END
@@ -170,13 +170,13 @@ async def delete_start(update: Update):
     user_id = str(update.message.from_user.id)
     if not user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
-            "🤖 ты кто такой сука чтоб это сделать?",
+            "🤖 Прости, но я тебя пока не знаю. Чтобы я мог тебе помочь, сначала введи команду /start и выполни пару шагов.",
             constants.ParseMode.MARKDOWN,
         )
         return
     else:
         await update.message.reply_text(
-            "🤖 Вы точно хотите чтобы я удалил все ваши данные? Я не смогу публиковать файлы пока вы снова не авторизуете меня в Strava.\nДля подтверждения повторите /delete, для отмены введите /cancel.",
+            "🤖 Ты точно хочешь чтобы я удалил все твои данные? Я больше не смогу работать с твоей Strava, пока ты снова мне не разрешить.\nДля подтверждения повтори команду /delete, для отмены /cancel.",
             constants.ParseMode.MARKDOWN,
         )
     return "delete_finish"
@@ -186,7 +186,7 @@ async def delete_finish(update: Update):
     user_id = str(update.message.from_user.id)
     USER_DB.remove(USER_QUERY["user_id"] == user_id)
     await update.message.reply_text(
-        "🤖 Готово, я вас больше не помню.",
+        "🤖 Готово!",
         constants.ParseMode.MARKDOWN,
     )
     return ConversationHandler.END
@@ -198,13 +198,13 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
-            "🤖 ты кто такой сука?",
+            "🤖 Прости, но я тебя пока не знаю. Чтобы я мог тебе помочь, сначала введи команду /start и выполни пару шагов.",
             constants.ParseMode.MARKDOWN,
         )
         return
     elif not scopes_valid(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
-            "🤖 ты кто такой сука чтоб это сделать?",
+            "🤖 Кажется, у меня не хватает прав, чтобы опубликовать активность. Пожалуйста, выполни команду /start еще раз.",
             constants.ParseMode.MARKDOWN,
         )
         return
@@ -222,10 +222,10 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [activity_keys],
         resize_keyboard=True,
         one_time_keyboard=True,
-        input_field_placeholder="Название активности",
+        input_field_placeholder="Имя активности",
     )
     await update.message.reply_text(
-        "🤖 Введите имя активности и я её опубликую.",
+        "🤖 Выбери имя активности и я её опубликую.",
         constants.ParseMode.MARKDOWN,
         reply_markup=activity_keyboard,
     )
@@ -272,13 +272,7 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # /help; справка
 async def help(update: Update):
-    user_id = str(update.message.from_user.id)
-    help_text = f"""🤖 Как помочь мне помочь вам опубликовать активность в Strava:\n
-*1.* Откройте Strava по ссылке [https://www.strava.com/oauth](http://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&response_type=code&scope=activity:write&redirect_uri={REDIRECT_URL}?user_id={user_id}).
-*2.* В открывшемся окне нажмите *Разрешить* – это позволит мне загружать файлы в ваш профиль.
-*3.* Пришлите мне файл формата `.fit`, `.tcx` или `.gpx`.
-*4.* Введите имя активности, выберите одно из последних или нажмите 💬, чтобы задать имя по умолчанию; команда /cancel отменит публикацию.
-*5.* Ждите, я опубликую вашу активность в Strava."""
+    help_text = f""
     await update.message.reply_text(help_text, constants.ParseMode.MARKDOWN)
 
 
@@ -295,7 +289,7 @@ async def cancel(update: Update):
 # Обработка прочего текста
 async def other(update: Update):
     await update.message.reply_text(
-        "🤖 К сожалению, я не знаю, что на это ответить.\nПопробуйте ввести команду /help.",
+        "🤖 К сожалению, я не понимаю, что ты имеешь ввиду.\nПопробуй ввести команду /help.",
         constants.ParseMode.MARKDOWN,
     )
 
