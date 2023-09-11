@@ -1,3 +1,4 @@
-venv
-storage
+__pycache__/
+venv/
+storage/
 settings.ini
