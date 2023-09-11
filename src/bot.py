@@ -29,7 +29,7 @@ USER_QUERY = Query()
 
 
 def user_exists(user_id: str, db: TinyDB, query: Query) -> bool:
-    user = db.search(query["user_id"] == user_id)
+    user = db.get(query["user_id"] == user_id)
     if user:
         return True
     else:
