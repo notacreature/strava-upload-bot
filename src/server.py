@@ -2,7 +2,7 @@ import os, configparser, requests
 from http import server
 from socketserver import BaseServer, TCPServer
 from tinydb import TinyDB, Query
-from dictionary import MESSAGES, STATUSES
+from dictionary import MESSAGES
 
 CONFIG = configparser.ConfigParser()
 CONFIG.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
