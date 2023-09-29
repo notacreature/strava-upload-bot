@@ -45,7 +45,7 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
         params = {
             "chat_id": incoming_params["user_id"],
-            "text": MESSAGES["msg_authorized"],
+            "text": MESSAGES["reply_authorized"],
             "parse_mode": "Markdown",
         }
         requests.post(url, params=params)

@@ -1,3 +1,5 @@
+# TODO Вынести скоупы в константу/сеттинги
+
 import os, requests, configparser
 from tinydb import TinyDB, Query
 from telegram import (
@@ -13,6 +15,7 @@ from telegram.ext import (
     ContextTypes,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     ConversationHandler,
     filters,
 )
@@ -99,6 +102,14 @@ async def upload_strava_activity(access_token: str, activity_name: str, data_typ
     return upload_id
 
 
+async def get_strava_activity(access_token: str, activity_id: str) -> str:
+    url = f"https://www.strava.com/api/v3/activities/{activity_id}"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = requests.get(url, headers=headers)
+    activity_partial = f"Имя: {response.json()['name']}\nТип: {response.json()['sport_type']}\nВремя: {response.json()['moving_time']}\nДистанция: {response.json()['distance']}\nОписание: {response.json()['description']}"
+    return activity_partial
+
+
 async def get_strava_upload_status(upload_id: str, access_token: str, statuses: dict):
     url = f"https://www.strava.com/api/v3/uploads/{upload_id}"
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -112,19 +123,19 @@ async def get_strava_upload_status(upload_id: str, access_token: str, statuses: 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     inline_key = InlineKeyboardButton(
-        MESSAGES["btn_auth"],
-        url=f"http://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&response_type=code&scope=activity:write&redirect_uri={REDIRECT_URL}?user_id={user_id}",
+        MESSAGES["key_auth"],
+        url=f"http://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&response_type=code&scope=activity:read,activity:write&redirect_uri={REDIRECT_URL}?user_id={user_id}",
     )
     inline_keyboard = InlineKeyboardMarkup([[inline_key]])
     if not user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
-            MESSAGES["msg_start"],
+            MESSAGES["reply_start"],
             constants.ParseMode.MARKDOWN,
             reply_markup=inline_keyboard,
         )
     else:
         await update.message.reply_text(
-            MESSAGES["msg_restart"],
+            MESSAGES["reply_restart"],
             constants.ParseMode.MARKDOWN,
             reply_markup=inline_keyboard,
         )
@@ -135,13 +146,13 @@ async def favorites_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     if not user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
-            MESSAGES["msg_unknown"],
+            MESSAGES["reply_unknown"],
             constants.ParseMode.MARKDOWN,
         )
         return
     else:
         await update.message.reply_text(
-            MESSAGES["msg_favorites"],
+            MESSAGES["reply_favorites"],
             constants.ParseMode.MARKDOWN,
         )
     return "favorites_finish"
@@ -154,7 +165,7 @@ async def favorites_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fav.strip()
     USER_DB.upsert({"favorites": favorites}, USER_QUERY["user_id"] == user_id)
     await update.message.reply_text(
-        MESSAGES["msg_done"],
+        MESSAGES["reply_done"],
         constants.ParseMode.MARKDOWN,
     )
     return ConversationHandler.END
@@ -165,13 +176,13 @@ async def delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     if not user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
-            MESSAGES["msg_unknown"],
+            MESSAGES["reply_unknown"],
             constants.ParseMode.MARKDOWN,
         )
         return
     else:
         await update.message.reply_text(
-            MESSAGES["msg_delete"],
+            MESSAGES["reply_delete"],
             constants.ParseMode.MARKDOWN,
         )
     return "delete_finish"
@@ -181,7 +192,7 @@ async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
     USER_DB.remove(USER_QUERY["user_id"] == user_id)
     await update.message.reply_text(
-        MESSAGES["msg_done"],
+        MESSAGES["reply_done"],
         constants.ParseMode.MARKDOWN,
     )
     return ConversationHandler.END
@@ -193,13 +204,13 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
-            MESSAGES["msg_unknown"],
+            MESSAGES["reply_unknown"],
             constants.ParseMode.MARKDOWN,
         )
         return
     elif not scopes_valid(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
-            MESSAGES["msg_scopes"],
+            MESSAGES["reply_scopes"],
             constants.ParseMode.MARKDOWN,
         )
         return
@@ -220,7 +231,7 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         input_field_placeholder=MESSAGES["placeholder_name"],
     )
     await update.message.reply_text(
-        MESSAGES["msg_name"],
+        MESSAGES["reply_name"],
         constants.ParseMode.MARKDOWN,
         reply_markup=activity_keyboard,
     )
@@ -239,26 +250,35 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     upload_id = await upload_strava_activity(access_token, activity_name, data_type, file)
 
     upload = await get_strava_upload_status(upload_id, access_token, STATUSES)
+    activity_id = upload["activity_id"]
     if upload["status"] == STATUSES["ready"]:
-        inline_key = InlineKeyboardButton(
-            MESSAGES["btn_activity"],
-            url=f"https://www.strava.com/activities/{upload['activity_id']}",
+        inline_keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(MESSAGES["key_chname"], callback_data="name"),
+                    InlineKeyboardButton(MESSAGES["key_chdesc"], callback_data="desc"),
+                    InlineKeyboardButton(MESSAGES["key_chtype"], callback_data="type"),
+                ],
+                [
+                    InlineKeyboardButton(MESSAGES["key_activity"], url=f"https://www.strava.com/activities/{activity_id}"),
+                ],
+            ]
         )
-        inline_keyboard = InlineKeyboardMarkup([[inline_key]])
+        activity_partial = await get_strava_activity(access_token, activity_id)
         await update.message.reply_text(
-            MESSAGES["msg_published"],
+            MESSAGES["reply_published"] + "\n```\n" + str(activity_partial) + "```",
             constants.ParseMode.MARKDOWN,
             reply_markup=inline_keyboard,
         )
     elif upload["status"] == STATUSES["error"]:
         await update.message.reply_text(
-            f"{MESSAGES['msg_error']} `{upload['error']}`",
+            f"{MESSAGES['reply_error']}`{upload['error']}`",
             constants.ParseMode.MARKDOWN,
             reply_markup=ReplyKeyboardRemove(),
         )
     elif upload["status"] == STATUSES["deleted"]:
         await update.message.reply_text(
-            f"{MESSAGES['msg_error']} `{upload['status']}`",
+            f"{MESSAGES['reply_error']}`{upload['status']}`",
             constants.ParseMode.MARKDOWN,
             reply_markup=ReplyKeyboardRemove(),
         )
@@ -268,7 +288,7 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # /help; справка
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        MESSAGES["msg_help"],
+        MESSAGES["reply_help"],
         constants.ParseMode.MARKDOWN,
     )
 
@@ -276,7 +296,7 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # /cancel; отмена диалога ConversationHandler
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        MESSAGES["msg_canceled"],
+        MESSAGES["reply_canceled"],
         constants.ParseMode.MARKDOWN,
         reply_markup=ReplyKeyboardRemove(),
     )
@@ -286,7 +306,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Обработка прочего текста
 async def other(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        MESSAGES["msg_other"],
+        MESSAGES["reply_other"],
         constants.ParseMode.MARKDOWN,
     )
 
@@ -305,10 +325,7 @@ def main():
     )
     upload_dialog = ConversationHandler(
         entry_points=[
-            MessageHandler(
-                filters.Document.FileExtension("fit") | filters.Document.FileExtension("tcx") | filters.Document.FileExtension("gpx"),
-                upload_start,
-            )
+            MessageHandler(filters.Document.FileExtension("fit") | filters.Document.FileExtension("tcx") | filters.Document.FileExtension("gpx"), upload_start)
         ],
         states={"upload_finish": [MessageHandler(~filters.COMMAND & filters.TEXT, upload_finish)]},
         fallbacks=[CommandHandler("cancel", cancel)],
@@ -324,7 +341,6 @@ def main():
             other,
         )
     )
-
     application.run_polling()
 
 
