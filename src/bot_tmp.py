@@ -1,5 +1,10 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, constants
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes, ConversationHandler, MessageHandler, filters
+from warnings import filterwarnings
+from telegram.warnings import PTBUserWarning
+
+filterwarnings(action="ignore", message=r".*CallbackQueryHandler", category=PTBUserWarning)
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -13,14 +18,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("""Активность опубликована 🏆
+    await update.message.reply_text(
+        """Активность опубликована 🏆
 ```
 Имя: Evening Workout
 Тип: Workout
 Время: 480
 Дистанция: 1356.4
 Описание: t.me/StravaUploadActivityBot
-```""",constants.ParseMode.MARKDOWN, reply_markup=reply_markup)
+```""",
+        constants.ParseMode.MARKDOWN,
+        reply_markup=reply_markup,
+    )
     return "upload_change"
 
 
@@ -53,7 +62,7 @@ async def chtype_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return "chtype_finish"
 
 
-async def chname_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):    
+async def chname_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [
             InlineKeyboardButton("✏ Имя", callback_data="NAME"),
@@ -65,18 +74,22 @@ async def chname_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(f"""Активность обновлена 🏆
+    await update.message.reply_text(
+        f"""Активность обновлена 🏆
 ```
 Имя: {update.message.text}
 Тип: Workout
 Время: 480
 Дистанция: 1356.4
 Описание: t.me/StravaUploadActivityBot
-```""",parse_mode=constants.ParseMode.MARKDOWN, reply_markup=reply_markup)
+```""",
+        parse_mode=constants.ParseMode.MARKDOWN,
+        reply_markup=reply_markup,
+    )
     return "upload_change"
 
 
-async def chdesc_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):    
+async def chdesc_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [
             InlineKeyboardButton("✏ Имя", callback_data="NAME"),
@@ -88,14 +101,18 @@ async def chdesc_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(f"""Активность обновлена 🏆
+    await update.message.reply_text(
+        f"""Активность обновлена 🏆
 ```
 Имя: Evening Workout
 Тип: Workout
 Время: 480
 Дистанция: 1356.4
 Описание: {update.message.text}
-```""",parse_mode=constants.ParseMode.MARKDOWN, reply_markup=reply_markup)
+```""",
+        parse_mode=constants.ParseMode.MARKDOWN,
+        reply_markup=reply_markup,
+    )
     return "upload_change"
 
 
@@ -113,15 +130,19 @@ async def chtype_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(text=f"""Активность обновлена 🏆
+    await query.edit_message_text(
+        text=f"""Активность обновлена 🏆
 ```
 Имя: Evening Workout
 Тип: {update.callback_query.data}
 Время: 480
 Дистанция: 1356.4
 Описание: t.me/StravaUploadActivityBot
-```""",parse_mode=constants.ParseMode.MARKDOWN, reply_markup=reply_markup)
-    
+```""",
+        parse_mode=constants.ParseMode.MARKDOWN,
+        reply_markup=reply_markup,
+    )
+
     return "upload_change"
 
 
@@ -129,7 +150,7 @@ def main() -> None:
     application = Application.builder().token("5833480161:AAGwy25wrYJT7LAiNCfb-Z6TCnWn8rS9mMU").build()
 
     conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Document.FileExtension(), start)],
+        entry_points=[MessageHandler(filters.Document.FileExtension("gpx"), start)],
         states={
             "upload_change": [
                 CallbackQueryHandler(chname_start, pattern="NAME"),
@@ -140,7 +161,7 @@ def main() -> None:
             "chdesc_finish": [MessageHandler(filters.TEXT, chdesc_finish)],
             "chtype_finish": [CallbackQueryHandler(chtype_finish, pattern=".*")],
         },
-        fallbacks=[MessageHandler(filters.Document.FileExtension(), start)],
+        fallbacks=[MessageHandler(filters.Document.FileExtension("gpx"), start)],
     )
 
     application.add_handler(conv_handler)
