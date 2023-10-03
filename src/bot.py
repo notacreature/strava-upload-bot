@@ -19,6 +19,16 @@ from telegram.ext import (
     ConversationHandler,
     filters,
 )
+from stravafunctions import (
+    user_exists,
+    scopes_valid,
+    get_strava_refresh_token,
+    get_strava_access_token,
+    post_strava_activity,
+    get_strava_upload,
+    get_strava_activity,
+    update_strava_activity,
+)
 from dictionary import MESSAGES, STATUSES
 
 CONFIG = configparser.ConfigParser()
@@ -29,94 +39,6 @@ CLIENT_SECRET = CONFIG["Strava"]["CLIENT_SECRET"]
 REDIRECT_URL = CONFIG["Server"]["URL"]
 USER_DB = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
 USER_QUERY = Query()
-
-
-def user_exists(user_id: str, db: TinyDB, query: Query) -> bool:
-    user = db.get(query["user_id"] == user_id)
-    if user:
-        return True
-    else:
-        return False
-
-
-def scopes_valid(user_id: str, db: TinyDB, query: Query) -> bool:
-    if not user_exists(user_id, db, query):
-        return False
-    else:
-        scope = db.get(query["user_id"] == user_id)["scope"]
-        if "activity:write" in scope:
-            return True
-        else:
-            return False
-
-
-async def get_strava_refresh_token(user_id: str, client_id: str, client_secret: str, db: TinyDB, query: Query) -> str:
-    refresh_token = db.get(query["user_id"] == user_id)["refresh_token"]
-    if not refresh_token:
-        url = f"https://www.strava.com/api/v3/oauth/token"
-        code = db.get(query["user_id"] == user_id)["auth_code"]
-        params = {
-            "client_id": f"{client_id}",
-            "client_secret": f"{client_secret}",
-            "grant_type": "authorization_code",
-            "code": f"{code}",
-        }
-        response = requests.post(url, params=params)
-        refresh_token = response.json()["refresh_token"]
-    return refresh_token
-
-
-async def get_strava_access_token(user_id: str, client_id: str, client_secret: str, refresh_token: str, db: TinyDB, query: Query) -> str:
-    url = f"https://www.strava.com/api/v3/oauth/token"
-    params = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "grant_type": "refresh_token",
-        "refresh_token": refresh_token,
-    }
-    response = requests.post(url, params=params)
-    refresh_token = response.json()["refresh_token"]
-    db.update({"refresh_token": str(refresh_token)}, query["user_id"] == user_id)
-    access_token = response.json()["access_token"]
-    return access_token
-
-
-async def upload_strava_activity(access_token: str, activity_name: str, data_type: str, file: bytes) -> str:
-    url = "https://www.strava.com/api/v3/uploads"
-    params = (
-        {
-            "name": activity_name,
-            "description": "t.me/StravaUploadActivityBot",
-            "data_type": data_type,
-        }
-        if activity_name != "⏩"
-        else {
-            "description": "t.me/StravaUploadActivityBot",
-            "data_type": data_type,
-        }
-    )
-    headers = {"Authorization": f"Bearer {access_token}"}
-    files = {"file": file}
-    response = requests.post(url, params=params, headers=headers, files=files)
-    upload_id = response.json()["id_str"]
-    return upload_id
-
-
-async def get_strava_activity(access_token: str, activity_id: str) -> str:
-    url = f"https://www.strava.com/api/v3/activities/{activity_id}"
-    headers = {"Authorization": f"Bearer {access_token}"}
-    response = requests.get(url, headers=headers)
-    activity_partial = f"Имя: {response.json()['name']}\nТип: {response.json()['sport_type']}\nВремя: {response.json()['moving_time']}\nДистанция: {response.json()['distance']}\nОписание: {response.json()['description']}"
-    return activity_partial
-
-
-async def get_strava_upload_status(upload_id: str, access_token: str, statuses: dict):
-    url = f"https://www.strava.com/api/v3/uploads/{upload_id}"
-    headers = {"Authorization": f"Bearer {access_token}"}
-    while True:
-        upload = requests.get(url, headers=headers).json()
-        if upload["status"] != statuses["wait"]:
-            return upload
 
 
 # /start; регистрация
@@ -149,7 +71,7 @@ async def favorites_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             MESSAGES["reply_unknown"],
             constants.ParseMode.MARKDOWN,
         )
-        return
+        return ConversationHandler.END
     else:
         await update.message.reply_text(
             MESSAGES["reply_favorites"],
@@ -179,7 +101,7 @@ async def delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             MESSAGES["reply_unknown"],
             constants.ParseMode.MARKDOWN,
         )
-        return
+        return ConversationHandler.END
     else:
         await update.message.reply_text(
             MESSAGES["reply_delete"],
@@ -207,66 +129,43 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             MESSAGES["reply_unknown"],
             constants.ParseMode.MARKDOWN,
         )
-        return
+        return ConversationHandler.END
     elif not scopes_valid(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
             MESSAGES["reply_scopes"],
             constants.ParseMode.MARKDOWN,
         )
-        return
+        return ConversationHandler.END
 
     file_id = update.message.document.file_id
     file_data = await context.bot.get_file(file_id)
-    context.user_data["file_name"] = update.message.document.file_name
-    context.user_data["file_path"] = file_data.file_path
-
-    activity_keys = ["⏩"]
-    favorites = USER_DB.get(USER_QUERY["user_id"] == user_id)["favorites"]
-    for fav in favorites:
-        activity_keys.append(fav)
-    activity_keyboard = ReplyKeyboardMarkup(
-        [activity_keys],
-        resize_keyboard=True,
-        one_time_keyboard=True,
-        input_field_placeholder=MESSAGES["placeholder_name"],
-    )
-    await update.message.reply_text(
-        MESSAGES["reply_name"],
-        constants.ParseMode.MARKDOWN,
-        reply_markup=activity_keyboard,
-    )
-    return "upload_finish"
-
-
-async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.message.from_user.id)
-    activity_name = update.message.text
-
+    data_type = str.split(update.message.document.file_name, ".")[-1]
+    file = requests.get(file_data.file_path).content
     refresh_token = await get_strava_refresh_token(user_id, CLIENT_ID, CLIENT_SECRET, USER_DB, USER_QUERY)
     access_token = await get_strava_access_token(user_id, CLIENT_ID, CLIENT_SECRET, refresh_token, USER_DB, USER_QUERY)
-    data_type = str.split(context.user_data["file_name"], ".")[-1]
-    file = requests.get(context.user_data["file_path"]).content
+    context.user_data["access_token"] = access_token
 
-    upload_id = await upload_strava_activity(access_token, activity_name, data_type, file)
-
-    upload = await get_strava_upload_status(upload_id, access_token, STATUSES)
+    upload_id = await post_strava_activity(access_token, data_type, file)
+    upload = await get_strava_upload(upload_id, access_token, STATUSES)
     activity_id = upload["activity_id"]
+    context.user_data["activity_id"] = activity_id
+
     if upload["status"] == STATUSES["ready"]:
         inline_keyboard = InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton(MESSAGES["key_chname"], callback_data="name"),
-                    InlineKeyboardButton(MESSAGES["key_chdesc"], callback_data="desc"),
-                    InlineKeyboardButton(MESSAGES["key_chtype"], callback_data="type"),
+                    InlineKeyboardButton("✏ Имя", callback_data="chname"),
+                    InlineKeyboardButton("✏ Описание", callback_data="chdesc"),
+                    InlineKeyboardButton("✏ Тип", callback_data="chtype"),
                 ],
                 [
                     InlineKeyboardButton(MESSAGES["key_activity"], url=f"https://www.strava.com/activities/{activity_id}"),
                 ],
             ]
         )
-        activity_partial = await get_strava_activity(access_token, activity_id)
+        activity = await get_strava_activity(access_token, activity_id)
         await update.message.reply_text(
-            MESSAGES["reply_published"] + "\n```\n" + str(activity_partial) + "```",
+            MESSAGES["reply_published"] + "\n```\n" + str(activity) + "```",
             constants.ParseMode.MARKDOWN,
             reply_markup=inline_keyboard,
         )
@@ -276,13 +175,146 @@ async def upload_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
             constants.ParseMode.MARKDOWN,
             reply_markup=ReplyKeyboardRemove(),
         )
+        return ConversationHandler.END
     elif upload["status"] == STATUSES["deleted"]:
         await update.message.reply_text(
             f"{MESSAGES['reply_error']}`{upload['status']}`",
             constants.ParseMode.MARKDOWN,
             reply_markup=ReplyKeyboardRemove(),
         )
-    return ConversationHandler.END
+        return ConversationHandler.END
+
+    return "upload_change"
+
+
+async def chname_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    await query.answer()
+
+    # favorites = USER_DB.get(USER_QUERY["user_id"] == user_id)["favorites"]
+    # if favorites:
+    #     activity_keyboard = ReplyKeyboardMarkup(
+    #         [favorites],
+    #         resize_keyboard=True,
+    #         one_time_keyboard=True,
+    #         input_field_placeholder=MESSAGES["placeholder_name"],
+    #     )
+    # await context.bot.send_message(
+    #     user_id,
+    #     MESSAGES["reply_name"],
+    #     constants.ParseMode.MARKDOWN,
+    #     reply_markup=activity_keyboard,
+    # )
+    return "chname_finish"
+
+
+async def chdesc_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await context.bot.send_message(
+        query.from_user.id,
+        "🤖 Введи новое описание",
+    )
+    return "chdesc_finish"
+
+
+async def chtype_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    inline_keyboard = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("🏊‍♀️ Swim", callback_data="swim"),
+                InlineKeyboardButton("🚴‍♂️ Ride", callback_data="ride"),
+                InlineKeyboardButton("👟 Run", callback_data="run"),
+            ]
+        ]
+    )
+    await query.edit_message_text(
+        text="🤖 Выбери новый тип",
+        reply_markup=inline_keyboard,
+    )
+    return "chtype_finish"
+
+
+async def chname_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    name = update.message.text
+    access_token = context.user_data["access_token"]
+    activity_id = context.user_data["activity_id"]
+    activity = await update_strava_activity(access_token, activity_id, name=name)
+
+    inline_keyboard = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("✏ Имя", callback_data="chname"),
+                InlineKeyboardButton("✏ Описание", callback_data="chdesc"),
+                InlineKeyboardButton("✏ Тип", callback_data="chtype"),
+            ],
+            [
+                InlineKeyboardButton(MESSAGES["key_activity"], url=f"https://www.strava.com/activities/{activity_id}"),
+            ],
+        ]
+    )
+    await update.message.reply_text(
+        MESSAGES["reply_updated"] + "\n```\n" + str(activity) + "```",
+        constants.ParseMode.MARKDOWN,
+        reply_markup=inline_keyboard,
+    )
+    return "upload_change"
+
+
+async def chdesc_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    description = update.message.text
+    access_token = context.user_data["access_token"]
+    activity_id = context.user_data["activity_id"]
+    activity = await update_strava_activity(access_token, activity_id, description=description)
+
+    inline_keyboard = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("✏ Имя", callback_data="chname"),
+                InlineKeyboardButton("✏ Описание", callback_data="chdesc"),
+                InlineKeyboardButton("✏ Тип", callback_data="chtype"),
+            ],
+            [
+                InlineKeyboardButton(MESSAGES["key_activity"], url=f"https://www.strava.com/activities/{activity_id}"),
+            ],
+        ]
+    )
+    await update.message.reply_text(
+        MESSAGES["reply_updated"] + "\n```\n" + str(activity) + "```",
+        constants.ParseMode.MARKDOWN,
+        reply_markup=inline_keyboard,
+    )
+    return "upload_change"
+
+
+async def chtype_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    sport_type = update.callback_query.data
+    access_token = context.user_data["access_token"]
+    activity_id = context.user_data["activity_id"]
+    activity = await update_strava_activity(access_token, activity_id, sport_type=sport_type)
+
+    inline_keyboard = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("✏ Имя", callback_data="chname"),
+                InlineKeyboardButton("✏ Описание", callback_data="chdesc"),
+                InlineKeyboardButton("✏ Тип", callback_data="chtype"),
+            ],
+            [
+                InlineKeyboardButton(MESSAGES["key_activity"], url=f"https://www.strava.com/activities/{activity_id}"),
+            ],
+        ]
+    )
+    await query.edit_message_text(
+        MESSAGES["reply_updated"] + "\n```\n" + str(activity) + "```",
+        constants.ParseMode.MARKDOWN,
+        reply_markup=inline_keyboard,
+    )
+    return "upload_change"
 
 
 # /help; справка
@@ -327,7 +359,17 @@ def main():
         entry_points=[
             MessageHandler(filters.Document.FileExtension("fit") | filters.Document.FileExtension("tcx") | filters.Document.FileExtension("gpx"), upload_start)
         ],
-        states={"upload_finish": [MessageHandler(~filters.COMMAND & filters.TEXT, upload_finish)]},
+        states={
+            # "upload_finish": [MessageHandler(~filters.COMMAND & filters.TEXT, upload_finish)],
+            "upload_change": [
+                CallbackQueryHandler(chname_start, pattern="chname"),
+                CallbackQueryHandler(chdesc_start, pattern="chdesc"),
+                CallbackQueryHandler(chtype_start, pattern="chtype"),
+            ],
+            "chname_finish": [MessageHandler(filters.TEXT, chname_finish)],
+            "chdesc_finish": [MessageHandler(filters.TEXT, chdesc_finish)],
+            "chtype_finish": [CallbackQueryHandler(chtype_finish, pattern="swim|ride|run")],
+        },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     application.add_handler(upload_dialog)
@@ -337,8 +379,7 @@ def main():
     application.add_handler(CommandHandler("help", help))
     application.add_handler(
         MessageHandler(
-            ~filters.COMMAND & ~filters.Document.FileExtension("fit") & ~filters.Document.FileExtension("tcx") & ~filters.Document.FileExtension("gpx"),
-            other,
+            ~filters.COMMAND & ~filters.Document.FileExtension("fit") & ~filters.Document.FileExtension("tcx") & ~filters.Document.FileExtension("gpx"), other
         )
     )
     application.run_polling()
