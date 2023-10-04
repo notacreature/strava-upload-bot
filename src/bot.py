@@ -347,20 +347,21 @@ async def other(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     application = ApplicationBuilder().token(TOKEN).build()
-    delete_dialog = ConversationHandler(
-        entry_points=[CommandHandler("delete", delete_start)],
-        states={"delete_finish": [CommandHandler("delete", delete_finish)]},
-        fallbacks=[CommandHandler("cancel", cancel)],
+
+    cancel_fallback = CommandHandler("cancel", cancel)
+    file_entry = MessageHandler(
+        filters.Document.FileExtension("fit") | filters.Document.FileExtension("tcx") | filters.Document.FileExtension("gpx"), upload_start
     )
-    favorites_dialog = ConversationHandler(
-        entry_points=[CommandHandler("favorites", favorites_start)],
-        states={"favorites_finish": [MessageHandler(filters.TEXT, favorites_finish)]},
-        fallbacks=[CommandHandler("cancel", cancel)],
+    favorites_entry = CommandHandler("favorites", favorites_start)
+    delete_entry = CommandHandler("delete", delete_start)
+
+    start_reply = CommandHandler("start", start)
+    help_reply = CommandHandler("help", help)
+    other_reply = MessageHandler(
+        ~filters.COMMAND & ~filters.Document.FileExtension("fit") & ~filters.Document.FileExtension("tcx") & ~filters.Document.FileExtension("gpx"), other
     )
     upload_dialog = ConversationHandler(
-        entry_points=[
-            MessageHandler(filters.Document.FileExtension("fit") | filters.Document.FileExtension("tcx") | filters.Document.FileExtension("gpx"), upload_start)
-        ],
+        entry_points=[file_entry],
         states={
             "upload_change": [
                 CallbackQueryHandler(chname_start, pattern="chname"),
@@ -371,19 +372,29 @@ def main():
             "chdesc_finish": [MessageHandler(filters.TEXT, chdesc_finish)],
             "chtype_finish": [CallbackQueryHandler(chtype_finish, pattern="swim|ride|run")],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[cancel_fallback, file_entry, favorites_entry, delete_entry],
     )
-    application.add_handler(upload_dialog)
-    application.add_handler(delete_dialog)
-    application.add_handler(favorites_dialog)
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help))
-    application.add_handler(
-        MessageHandler(
-            ~filters.COMMAND & ~filters.Document.FileExtension("fit") & ~filters.Document.FileExtension("tcx") & ~filters.Document.FileExtension("gpx"), other
-        )
+    favorites_dialog = ConversationHandler(
+        entry_points=[favorites_entry],
+        states={"favorites_finish": [MessageHandler(filters.TEXT, favorites_finish)]},
+        fallbacks=[cancel_fallback, file_entry, favorites_entry, delete_entry],
     )
-    application.run_polling()
+    delete_dialog = ConversationHandler(
+        entry_points=[delete_entry],
+        states={"delete_finish": [CommandHandler("delete", delete_finish)]},
+        fallbacks=[cancel_fallback, file_entry, favorites_entry, delete_entry],
+    )
+
+    application.add_handlers(
+        [
+            start_reply,
+            help_reply,
+            other_reply,
+            upload_dialog,
+            favorites_dialog,
+            delete_dialog,
+        ]
+    )
 
 
 if __name__ == "__main__":
