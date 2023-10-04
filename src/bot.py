@@ -387,12 +387,12 @@ def main():
 
     application.add_handlers(
         [
-            start_reply,
-            help_reply,
-            other_reply,
             upload_dialog,
             favorites_dialog,
             delete_dialog,
+            start_reply,
+            help_reply,
+            other_reply,
         ]
     )
 
