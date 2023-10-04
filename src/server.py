@@ -2,7 +2,7 @@ import os, configparser, requests
 from http import server
 from socketserver import BaseServer, TCPServer
 from tinydb import TinyDB, Query
-from dictionary import MESSAGES
+from dictionary import TEXT, URL
 
 CONFIG = configparser.ConfigParser()
 CONFIG.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
@@ -42,10 +42,10 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         )
 
         # Отвечаем в чат об успехе
-        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+        url = URL["bot"].format(TOKEN)
         params = {
             "chat_id": incoming_params["user_id"],
-            "text": MESSAGES["reply_authorized"],
+            "text": TEXT["reply_authorized"],
             "parse_mode": "Markdown",
         }
         requests.post(url, params=params)

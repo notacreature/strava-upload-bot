@@ -10,12 +10,12 @@ def user_exists(user_id: str, db: TinyDB, query: Query) -> bool:
         return False
 
 
-def scopes_valid(user_id: str, db: TinyDB, query: Query) -> bool:
+def scope_valid(user_id: str, db: TinyDB, query: Query, scope: str) -> bool:
     if not user_exists(user_id, db, query):
         return False
     else:
-        scope = db.get(query["user_id"] == user_id)["scope"]
-        if "activity:write" in scope:
+        usrscope = db.get(query["user_id"] == user_id)["scope"]
+        if scope in usrscope:
             return True
         else:
             return False
@@ -78,8 +78,14 @@ async def get_strava_activity(access_token: str, activity_id: str) -> str:
     url = f"https://www.strava.com/api/v3/activities/{activity_id}"
     headers = {"Authorization": f"Bearer {access_token}"}
     response = requests.get(url, headers=headers)
-    activity_partial = f"Имя: {response.json()['name']}\nТип: {response.json()['sport_type']}\nВремя: {response.json()['moving_time']}\nДистанция: {response.json()['distance']}\nОписание: {response.json()['description']}"
-    return activity_partial
+    activity_params = {
+        "name": response.json()["name"],
+        "sport_type": response.json()["sport_type"],
+        "moving_time": response.json()["moving_time"],
+        "distance": response.json()["distance"],
+        "description": response.json()["description"],
+    }
+    return activity_params
 
 
 async def update_strava_activity(access_token: str, activity_id: str, name: str = None, description: str = None, sport_type: str = None) -> str:
@@ -93,5 +99,11 @@ async def update_strava_activity(access_token: str, activity_id: str, name: str 
     headers = {"Authorization": f"Bearer {access_token}"}
     requests.put(url, headers=headers)
     response = requests.get(url, headers=headers)
-    activity_partial = f"Имя: {response.json()['name']}\nТип: {response.json()['sport_type']}\nВремя: {response.json()['moving_time']}\nДистанция: {response.json()['distance']}\nОписание: {response.json()['description']}"
-    return activity_partial
+    activity_params = {
+        "name": response.json()["name"],
+        "sport_type": response.json()["sport_type"],
+        "moving_time": response.json()["moving_time"],
+        "distance": response.json()["distance"],
+        "description": response.json()["description"],
+    }
+    return activity_params
