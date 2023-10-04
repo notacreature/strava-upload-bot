@@ -62,6 +62,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             constants.ParseMode.MARKDOWN,
             reply_markup=inline_keyboard,
         )
+    return ConversationHandler.END
 
 
 # /favorites; создание списка избранных названий
@@ -325,6 +326,7 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         TEXT["reply_help"],
         constants.ParseMode.MARKDOWN,
     )
+    return ConversationHandler.END
 
 
 # /cancel; отмена диалога ConversationHandler
@@ -343,6 +345,7 @@ async def other(update: Update, context: ContextTypes.DEFAULT_TYPE):
         TEXT["reply_other"],
         constants.ParseMode.MARKDOWN,
     )
+    return ConversationHandler.END
 
 
 def main():
