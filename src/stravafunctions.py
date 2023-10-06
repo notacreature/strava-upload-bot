@@ -57,6 +57,7 @@ async def post_strava_activity(access_token: str, data_type: str, file: bytes) -
     params = {
         "description": "t.me/StravaUploadActivityBot",
         "data_type": data_type,
+        "sport_type": "Run",  # HACK
     }
     headers = {"Authorization": f"Bearer {access_token}"}
     files = {"file": file}
@@ -90,15 +91,18 @@ async def get_strava_activity(access_token: str, activity_id: str) -> str:
 
 async def update_strava_activity(access_token: str, activity_id: str, name: str = None, description: str = None, sport_type: str = None) -> str:
     url = f"https://www.strava.com/api/v3/activities/{activity_id}"
-    if name is not None:
-        url += f"?name={name}"
-    elif description is not None:
-        url += f"?description={description}"
-    elif sport_type is not None:
-        url += f"?type={sport_type}"
+    params = {
+        key: value
+        for key, value in (
+            ("name", name),
+            ("description", description),
+            ("sport_type", sport_type),
+        )
+        if value is not None
+    }
     headers = {"Authorization": f"Bearer {access_token}"}
     requests.put(url, headers=headers)
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, params=params, headers=headers)
     activity_params = {
         "name": response.json()["name"],
         "sport_type": response.json()["sport_type"],
