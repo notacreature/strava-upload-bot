@@ -228,9 +228,9 @@ async def chtype_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     inline_keyboard = InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton(TEXT["key_swim"], callback_data="swim"),
-                InlineKeyboardButton(TEXT["key_ride"], callback_data="ride"),
-                InlineKeyboardButton(TEXT["key_run"], callback_data="run"),
+                InlineKeyboardButton(TEXT["key_swim"], callback_data="Swim"),
+                InlineKeyboardButton(TEXT["key_ride"], callback_data="Ride"),
+                InlineKeyboardButton(TEXT["key_run"], callback_data="Run"),
             ]
         ]
     )
