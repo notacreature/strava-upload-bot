@@ -374,7 +374,7 @@ def main():
             ],
             "chname_finish": [MessageHandler(filters.TEXT, chname_finish)],
             "chdesc_finish": [MessageHandler(filters.TEXT, chdesc_finish)],
-            "chtype_finish": [CallbackQueryHandler(chtype_finish, pattern="swim|ride|run")],
+            "chtype_finish": [CallbackQueryHandler(chtype_finish, pattern="Swim|Ride|Run")],
         },
         fallbacks=[cancel_fallback, file_entry, favorites_entry, delete_entry],
     )

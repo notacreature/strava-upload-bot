@@ -101,8 +101,8 @@ async def update_strava_activity(access_token: str, activity_id: str, name: str 
         if value is not None
     }
     headers = {"Authorization": f"Bearer {access_token}"}
-    requests.put(url, headers=headers)
-    response = requests.get(url, params=params, headers=headers)
+    requests.put(url, params=params, headers=headers)
+    response = requests.get(url, headers=headers)
     activity_params = {
         "name": response.json()["name"],
         "sport_type": response.json()["sport_type"],
