@@ -19,7 +19,6 @@ from telegram.ext import (
 )
 from stravafunctions import (
     user_exists,
-    scope_valid,
     get_strava_refresh_token,
     get_strava_access_token,
     post_strava_activity,
@@ -127,66 +126,61 @@ async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
 
-    if not user_exists(user_id, USER_DB, USER_QUERY):
+    if user_exists(user_id, USER_DB, USER_QUERY):
+        file_id = update.message.document.file_id
+        file_data = await context.bot.get_file(file_id)
+        data_type = str.split(update.message.document.file_name, ".")[-1]
+        file = requests.get(file_data.file_path).content
+        refresh_token = await get_strava_refresh_token(user_id, CLIENT_ID, CLIENT_SECRET, USER_DB, USER_QUERY)
+        access_token = await get_strava_access_token(user_id, CLIENT_ID, CLIENT_SECRET, refresh_token, USER_DB, USER_QUERY)
+        context.user_data["access_token"] = access_token
+
+        upload_id = await post_strava_activity(access_token, data_type, file)
+        upload = await get_strava_upload(upload_id, access_token, STATUS)
+        activity_id = upload["activity_id"]
+        context.user_data["activity_id"] = activity_id
+
+        if upload["status"] == STATUS["ready"]:
+            inline_keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(TEXT["key_chname"], callback_data="chname"),
+                        InlineKeyboardButton(TEXT["key_chdesc"], callback_data="chdesc"),
+                        InlineKeyboardButton(TEXT["key_chtype"], callback_data="chtype"),
+                    ],
+                    [
+                        InlineKeyboardButton(TEXT["key_openstrava"], url=URL["activity"].format(activity_id)),
+                    ],
+                ]
+            )
+            activity = await get_strava_activity(access_token, activity_id)
+            await update.message.reply_text(
+                TEXT["reply_activityuploaded"].format(
+                    activity["name"], activity["sport_type"], activity["moving_time"], activity["distance"], activity["description"]
+                ),
+                constants.ParseMode.MARKDOWN,
+                reply_markup=inline_keyboard,
+            )
+            return "upload_change"
+        elif upload["status"] == STATUS["error"]:
+            await update.message.reply_text(
+                TEXT["reply_error"].format(upload["error"]),
+                constants.ParseMode.MARKDOWN,
+                reply_markup=ReplyKeyboardRemove(),
+            )
+            return ConversationHandler.END
+        elif upload["status"] == STATUS["deleted"]:
+            await update.message.reply_text(
+                TEXT["reply_error"].format(upload["status"]),
+                constants.ParseMode.MARKDOWN,
+                reply_markup=ReplyKeyboardRemove(),
+            )
+            return ConversationHandler.END
+
+    else:
         await update.message.reply_text(
             TEXT["reply_unknown"],
             constants.ParseMode.MARKDOWN,
-        )
-        return ConversationHandler.END
-    elif not scope_valid(user_id, USER_DB, USER_QUERY, SCOPE):
-        await update.message.reply_text(
-            TEXT["reply_scope"],
-            constants.ParseMode.MARKDOWN,
-        )
-        return ConversationHandler.END
-
-    file_id = update.message.document.file_id
-    file_data = await context.bot.get_file(file_id)
-    data_type = str.split(update.message.document.file_name, ".")[-1]
-    file = requests.get(file_data.file_path).content
-    refresh_token = await get_strava_refresh_token(user_id, CLIENT_ID, CLIENT_SECRET, USER_DB, USER_QUERY)
-    access_token = await get_strava_access_token(user_id, CLIENT_ID, CLIENT_SECRET, refresh_token, USER_DB, USER_QUERY)
-    context.user_data["access_token"] = access_token
-
-    upload_id = await post_strava_activity(access_token, data_type, file)
-    upload = await get_strava_upload(upload_id, access_token, STATUS)
-    activity_id = upload["activity_id"]
-    context.user_data["activity_id"] = activity_id
-
-    if upload["status"] == STATUS["ready"]:
-        inline_keyboard = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(TEXT["key_chname"], callback_data="chname"),
-                    InlineKeyboardButton(TEXT["key_chdesc"], callback_data="chdesc"),
-                    InlineKeyboardButton(TEXT["key_chtype"], callback_data="chtype"),
-                ],
-                [
-                    InlineKeyboardButton(TEXT["key_openstrava"], url=URL["activity"].format(activity_id)),
-                ],
-            ]
-        )
-        activity = await get_strava_activity(access_token, activity_id)
-        await update.message.reply_text(
-            TEXT["reply_activityuploaded"].format(
-                activity["name"], activity["sport_type"], activity["moving_time"], activity["distance"], activity["description"]
-            ),
-            constants.ParseMode.MARKDOWN,
-            reply_markup=inline_keyboard,
-        )
-        return "upload_change"
-    elif upload["status"] == STATUS["error"]:
-        await update.message.reply_text(
-            TEXT["reply_error"].format(upload["error"]),
-            constants.ParseMode.MARKDOWN,
-            reply_markup=ReplyKeyboardRemove(),
-        )
-        return ConversationHandler.END
-    elif upload["status"] == STATUS["deleted"]:
-        await update.message.reply_text(
-            TEXT["reply_error"].format(upload["status"]),
-            constants.ParseMode.MARKDOWN,
-            reply_markup=ReplyKeyboardRemove(),
         )
         return ConversationHandler.END
 

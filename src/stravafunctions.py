@@ -10,17 +10,6 @@ def user_exists(user_id: str, db: TinyDB, query: Query) -> bool:
         return False
 
 
-def scope_valid(user_id: str, db: TinyDB, query: Query, scope: str) -> bool:
-    if not user_exists(user_id, db, query):
-        return False
-    else:
-        usrscope = db.get(query["user_id"] == user_id)["scope"]
-        if scope in usrscope:
-            return True
-        else:
-            return False
-
-
 async def get_strava_refresh_token(user_id: str, client_id: str, client_secret: str, db: TinyDB, query: Query) -> str:
     refresh_token = db.get(query["user_id"] == user_id)["refresh_token"]
     if not refresh_token:

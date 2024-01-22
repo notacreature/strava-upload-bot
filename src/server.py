@@ -6,11 +6,12 @@ from dictionary import TEXT, URL
 
 CONFIG = configparser.ConfigParser()
 CONFIG.read(os.path.join(os.path.dirname(__file__), "..", "settings.ini"))
-TOKEN = CONFIG["Telegram"]["BOT_TOKEN"]
 BOT_URL = CONFIG["Telegram"]["BOT_URL"]
-PORT = CONFIG["Server"]["PORT"]
-USER_QUERY = Query()
+SCOPE = CONFIG["Strava"]["SCOPE"]
 USER_DB = TinyDB(os.path.join(os.path.dirname(__file__), "..", "storage", "userdata.json"))
+USER_QUERY = Query()
+TOKEN = CONFIG["Telegram"]["BOT_TOKEN"]
+PORT = CONFIG["Server"]["PORT"]
 
 
 # Создаем класс обработчика запросов, наследуя от SimpleHTTPRequestHandler
@@ -29,26 +30,35 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         self.send_header("Location", url)
         self.end_headers()
 
-        # Создаём пользователя с полученными параметрами
-        USER_DB.upsert(
-            {
-                "user_id": str(incoming_params["user_id"]),
-                "scope": str(incoming_params["scope"]),
-                "auth_code": str(incoming_params["code"]),
-                "refresh_token": "",
-                "favorites": [],
-            },
-            USER_QUERY["user_id"] == incoming_params["user_id"],
-        )
+        # Если scope соответствуют требуемым – добавляем пользователя в БД; если нет, сообщаем в чат об ошибке.
+        if str(incoming_params["scope"]) == SCOPE:
+            USER_DB.upsert(
+                {
+                    "user_id": str(incoming_params["user_id"]),
+                    "scope": str(incoming_params["scope"]),
+                    "auth_code": str(incoming_params["code"]),
+                    "refresh_token": "",
+                    "favorites": [],
+                },
+                USER_QUERY["user_id"] == incoming_params["user_id"],
+            )
 
-        # Отвечаем в чат об успехе
-        url = URL["bot"].format(TOKEN)
-        params = {
-            "chat_id": incoming_params["user_id"],
-            "text": TEXT["reply_authorized"],
-            "parse_mode": "Markdown",
-        }
-        requests.post(url, params=params)
+            url = URL["bot"].format(TOKEN)
+            params = {
+                "chat_id": str(incoming_params["user_id"]),
+                "text": TEXT["reply_authorized"],
+                "parse_mode": "Markdown",
+            }
+            requests.post(url, params=params)
+
+        else:
+            url = URL["bot"].format(TOKEN)
+            params = {
+                "chat_id": str(incoming_params["user_id"]),
+                "text": TEXT["reply_scope"],
+                "parse_mode": "Markdown",
+            }
+            requests.post(url, params=params)
 
 
 # Создаем и запускаем TCPServer
