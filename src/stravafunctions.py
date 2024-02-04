@@ -121,3 +121,9 @@ async def update_strava_activity(
         "description": response.json()["description"],
     }
     return activity_params
+
+
+async def strava_deauthorize(access_token: str):
+    url = "https://www.strava.com/oauth/deauthorize"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    requests.post(url, headers=headers)

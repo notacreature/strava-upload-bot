@@ -26,6 +26,7 @@ from stravafunctions import (
     get_strava_activity,
     get_strava_gear,
     update_strava_activity,
+    strava_deauthorize,
 )
 from dictionary import TEXT, URL, STATUS
 
@@ -115,6 +116,9 @@ async def delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
+    refresh_token = await get_strava_refresh_token(user_id, CLIENT_ID, CLIENT_SECRET, USER_DB, USER_QUERY)
+    access_token = await get_strava_access_token(user_id, CLIENT_ID, CLIENT_SECRET, refresh_token, USER_DB, USER_QUERY)
+    strava_deauthorize(access_token)
     USER_DB.remove(USER_QUERY["user_id"] == user_id)
     await update.message.reply_text(
         TEXT["reply_done"],
