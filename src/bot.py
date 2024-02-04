@@ -137,10 +137,11 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     upload_id = await strava.post_activity(access_token, data_type, file)
     upload = await strava.get_upload(upload_id, access_token, STATUS)
-    activity_id = upload["activity_id"]
+    activity_id = str(upload["activity_id"])
     context.user_data["activity_id"] = activity_id
+    status = str(upload["status"])
 
-    if upload["status"] == STATUS["ready"]:
+    if status == STATUS["ready"]:
         inline_keyboard = InlineKeyboardMarkup(
             [
                 [
@@ -165,16 +166,16 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=inline_keyboard,
         )
         return "upload_change"
-    elif upload["status"] == STATUS["error"]:
+    elif status == STATUS["error"]:
         await update.message.reply_text(
-            TEXT["reply_error"].format(upload["error"]),
+            TEXT["reply_error"].format(status),
             constants.ParseMode.MARKDOWN,
             reply_markup=ReplyKeyboardRemove(),
         )
         return ConversationHandler.END
-    elif upload["status"] == STATUS["deleted"]:
+    elif status == STATUS["deleted"]:
         await update.message.reply_text(
-            TEXT["reply_error"].format(upload["status"]),
+            TEXT["reply_error"].format(status),
             constants.ParseMode.MARKDOWN,
             reply_markup=ReplyKeyboardRemove(),
         )
@@ -427,22 +428,22 @@ def main():
                 CallbackQueryHandler(chtype_start, pattern="chtype"),
                 CallbackQueryHandler(chgear_start, pattern="chgear"),
             ],
-            "chname_finish": [MessageHandler(filters.TEXT, chname_finish)],
-            "chdesc_finish": [MessageHandler(filters.TEXT, chdesc_finish)],
+            "chname_finish": [MessageHandler(~filters.COMMAND & filters.TEXT, chname_finish)],
+            "chdesc_finish": [MessageHandler(~filters.COMMAND & filters.TEXT, chdesc_finish)],
             "chtype_finish": [CallbackQueryHandler(chtype_finish, pattern="Swim|Ride|Run")],
             "chgear_finish": [CallbackQueryHandler(chgear_finish, pattern="^\w\d+$")],
         },
-        fallbacks=[cancel_fallback, file_entry, favorites_entry, delete_entry],
+        fallbacks=[cancel_fallback],
     )
     favorites_dialog = ConversationHandler(
         entry_points=[favorites_entry],
-        states={"favorites_finish": [MessageHandler(filters.TEXT, favorites_finish)]},
-        fallbacks=[cancel_fallback, file_entry, favorites_entry, delete_entry],
+        states={"favorites_finish": [MessageHandler(~filters.COMMAND & filters.TEXT, favorites_finish)]},
+        fallbacks=[cancel_fallback],
     )
     delete_dialog = ConversationHandler(
         entry_points=[delete_entry],
         states={"delete_finish": [CommandHandler("delete", delete_finish)]},
-        fallbacks=[cancel_fallback, file_entry, favorites_entry, delete_entry],
+        fallbacks=[cancel_fallback],
     )
 
     application.add_handlers(

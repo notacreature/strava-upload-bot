@@ -19,7 +19,7 @@ def get_refresh_token(user_id: str, client_id: str, client_secret: str, code: st
         "code": f"{code}",
     }
     response = requests.post(url, params=params)
-    refresh_token = response.json()["refresh_token"]
+    refresh_token = str(response.json()["refresh_token"])
     return refresh_token
 
 
@@ -32,9 +32,9 @@ async def get_access_token(user_id: str, client_id: str, client_secret: str, ref
         "refresh_token": refresh_token,
     }
     response = requests.post(url, params=params)
-    refresh_token = response.json()["refresh_token"]
+    refresh_token = str(response.json()["refresh_token"])
     db.update({"refresh_token": str(refresh_token)}, query["user_id"] == user_id)
-    access_token = response.json()["access_token"]
+    access_token = str(response.json()["access_token"])
     return access_token
 
 
@@ -48,7 +48,7 @@ async def post_activity(access_token: str, data_type: str, file: bytes) -> str:
     headers = {"Authorization": f"Bearer {access_token}"}
     files = {"file": file}
     response = requests.post(url, params=params, headers=headers, files=files)
-    upload_id = response.json()["id_str"]
+    upload_id = str(response.json()["id_str"])
     return upload_id
 
 
@@ -66,13 +66,16 @@ async def get_activity(access_token: str, activity_id: str) -> str:
     headers = {"Authorization": f"Bearer {access_token}"}
     response = requests.get(url, headers=headers)
     activity_params = {
-        "name": response.json()["name"],
-        "sport_type": response.json()["sport_type"],
-        "gear": response.json()["gear"]["name"],
-        "moving_time": response.json()["moving_time"],
-        "distance": response.json()["distance"],
-        "description": response.json()["description"],
+        "name": str(response.json()["name"]),
+        "sport_type": str(response.json()["sport_type"]),
+        "moving_time": str(response.json()["moving_time"]),
+        "distance": str(response.json()["distance"]),
+        "description": str(response.json()["description"]),
     }
+    try:
+        activity_params["gear"] = str(response.json()["gear"]["name"])
+    except KeyError:
+        activity_params["gear"] = "None"
     return activity_params
 
 
@@ -108,13 +111,16 @@ async def update_activity(access_token: str, activity_id: str, description: str 
     requests.put(url, params=params, headers=headers)
     response = requests.get(url, headers=headers)
     activity_params = {
-        "name": response.json()["name"],
-        "sport_type": response.json()["sport_type"],
-        "gear": response.json()["gear"]["name"],
-        "moving_time": response.json()["moving_time"],
-        "distance": response.json()["distance"],
-        "description": response.json()["description"],
+        "name": str(response.json()["name"]),
+        "sport_type": str(response.json()["sport_type"]),
+        "moving_time": str(response.json()["moving_time"]),
+        "distance": str(response.json()["distance"]),
+        "description": str(response.json()["description"]),
     }
+    try:
+        activity_params["gear"] = str(response.json()["gear"]["name"])
+    except KeyError:
+        activity_params["gear"] = "None"
     return activity_params
 
 
