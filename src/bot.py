@@ -1,4 +1,4 @@
-import os, requests, configparser
+import os, requests, configparser, strava
 from tinydb import TinyDB, Query
 from telegram import (
     Update,
@@ -16,17 +16,6 @@ from telegram.ext import (
     CallbackQueryHandler,
     ConversationHandler,
     filters,
-)
-from stravafunctions import (
-    user_exists,
-    get_strava_refresh_token,
-    get_strava_access_token,
-    post_strava_activity,
-    get_strava_upload,
-    get_strava_activity,
-    get_strava_gear,
-    update_strava_activity,
-    strava_deauthorize,
 )
 from dictionary import TEXT, URL, STATUS
 
@@ -51,7 +40,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
         ]
     )
-    if not user_exists(user_id, USER_DB, USER_QUERY):
+    if not strava.user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
             TEXT["reply_start"],
             constants.ParseMode.MARKDOWN,
@@ -70,7 +59,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # /favorites; создание списка избранных названий
 async def favorites_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
-    if not user_exists(user_id, USER_DB, USER_QUERY):
+    if not strava.user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
             TEXT["reply_unknown"],
             constants.ParseMode.MARKDOWN,
@@ -100,7 +89,7 @@ async def favorites_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # /delete; удаление данных пользователя из userdata.json
 async def delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
-    if not user_exists(user_id, USER_DB, USER_QUERY):
+    if not strava.user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
             TEXT["reply_unknown"],
             constants.ParseMode.MARKDOWN,
@@ -116,9 +105,9 @@ async def delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
-    refresh_token = await get_strava_refresh_token(user_id, CLIENT_ID, CLIENT_SECRET, USER_DB, USER_QUERY)
-    access_token = await get_strava_access_token(user_id, CLIENT_ID, CLIENT_SECRET, refresh_token, USER_DB, USER_QUERY)
-    strava_deauthorize(access_token)
+    refresh_token = await strava.get_refresh_token(user_id, CLIENT_ID, CLIENT_SECRET, USER_DB, USER_QUERY)
+    access_token = await strava.get_access_token(user_id, CLIENT_ID, CLIENT_SECRET, refresh_token, USER_DB, USER_QUERY)
+    strava.deauthorize(access_token)
     USER_DB.remove(USER_QUERY["user_id"] == user_id)
     await update.message.reply_text(
         TEXT["reply_done"],
@@ -131,7 +120,7 @@ async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
 
-    if not user_exists(user_id, USER_DB, USER_QUERY):
+    if not strava.user_exists(user_id, USER_DB, USER_QUERY):
         await update.message.reply_text(
             TEXT["reply_unknown"],
             constants.ParseMode.MARKDOWN,
@@ -142,12 +131,12 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_data = await context.bot.get_file(file_id)
     data_type = str.split(update.message.document.file_name, ".")[-1]
     file = requests.get(file_data.file_path).content
-    refresh_token = await get_strava_refresh_token(user_id, CLIENT_ID, CLIENT_SECRET, USER_DB, USER_QUERY)
-    access_token = await get_strava_access_token(user_id, CLIENT_ID, CLIENT_SECRET, refresh_token, USER_DB, USER_QUERY)
+    refresh_token = await strava.get_refresh_token(user_id, CLIENT_ID, CLIENT_SECRET, USER_DB, USER_QUERY)
+    access_token = await strava.get_access_token(user_id, CLIENT_ID, CLIENT_SECRET, refresh_token, USER_DB, USER_QUERY)
     context.user_data["access_token"] = access_token
 
-    upload_id = await post_strava_activity(access_token, data_type, file)
-    upload = await get_strava_upload(upload_id, access_token, STATUS)
+    upload_id = await strava.post_activity(access_token, data_type, file)
+    upload = await strava.get_upload(upload_id, access_token, STATUS)
     activity_id = upload["activity_id"]
     context.user_data["activity_id"] = activity_id
 
@@ -167,7 +156,7 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ],
             ]
         )
-        activity = await get_strava_activity(access_token, activity_id)
+        activity = await strava.get_activity(access_token, activity_id)
         await update.message.reply_text(
             TEXT["reply_activityuploaded"].format(
                 activity["name"], activity["sport_type"], activity["gear"], activity["moving_time"], activity["distance"], activity["description"]
@@ -247,7 +236,7 @@ async def chgear_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     access_token = context.user_data["access_token"]
-    gear_list = await get_strava_gear(access_token)
+    gear_list = await strava.get_gear(access_token)
     inline_keys = []
     for gear in gear_list:
         inline_keys.append([InlineKeyboardButton(gear["type"] + " " + gear["name"], callback_data=gear["id"])])
@@ -264,7 +253,7 @@ async def chname_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.message.text
     access_token = context.user_data["access_token"]
     activity_id = context.user_data["activity_id"]
-    activity = await update_strava_activity(access_token, activity_id, name=name)
+    activity = await strava.update_activity(access_token, activity_id, name=name)
 
     inline_keyboard = InlineKeyboardMarkup(
         [
@@ -295,7 +284,7 @@ async def chdesc_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     description = update.message.text
     access_token = context.user_data["access_token"]
     activity_id = context.user_data["activity_id"]
-    activity = await update_strava_activity(access_token, activity_id, description=description)
+    activity = await strava.update_activity(access_token, activity_id, description=description)
 
     inline_keyboard = InlineKeyboardMarkup(
         [
@@ -327,7 +316,7 @@ async def chtype_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sport_type = update.callback_query.data
     access_token = context.user_data["access_token"]
     activity_id = context.user_data["activity_id"]
-    activity = await update_strava_activity(access_token, activity_id, sport_type=sport_type)
+    activity = await strava.update_activity(access_token, activity_id, sport_type=sport_type)
 
     inline_keyboard = InlineKeyboardMarkup(
         [
@@ -359,7 +348,7 @@ async def chgear_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     gear_id = update.callback_query.data
     access_token = context.user_data["access_token"]
     activity_id = context.user_data["activity_id"]
-    activity = await update_strava_activity(access_token, activity_id, gear_id=gear_id)
+    activity = await strava.update_activity(access_token, activity_id, gear_id=gear_id)
 
     inline_keyboard = InlineKeyboardMarkup(
         [

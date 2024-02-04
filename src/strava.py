@@ -10,7 +10,7 @@ def user_exists(user_id: str, db: TinyDB, query: Query) -> bool:
         return False
 
 
-async def get_strava_refresh_token(user_id: str, client_id: str, client_secret: str, db: TinyDB, query: Query) -> str:
+async def get_refresh_token(user_id: str, client_id: str, client_secret: str, db: TinyDB, query: Query) -> str:
     refresh_token = db.get(query["user_id"] == user_id)["refresh_token"]
     if not refresh_token:
         url = f"https://www.strava.com/api/v3/oauth/token"
@@ -26,7 +26,7 @@ async def get_strava_refresh_token(user_id: str, client_id: str, client_secret: 
     return refresh_token
 
 
-async def get_strava_access_token(user_id: str, client_id: str, client_secret: str, refresh_token: str, db: TinyDB, query: Query) -> str:
+async def get_access_token(user_id: str, client_id: str, client_secret: str, refresh_token: str, db: TinyDB, query: Query) -> str:
     url = f"https://www.strava.com/api/v3/oauth/token"
     params = {
         "client_id": client_id,
@@ -41,7 +41,7 @@ async def get_strava_access_token(user_id: str, client_id: str, client_secret: s
     return access_token
 
 
-async def post_strava_activity(access_token: str, data_type: str, file: bytes) -> str:
+async def post_activity(access_token: str, data_type: str, file: bytes) -> str:
     url = "https://www.strava.com/api/v3/uploads"
     params = {
         "description": "t.me/StravaUploadActivityBot",
@@ -55,7 +55,7 @@ async def post_strava_activity(access_token: str, data_type: str, file: bytes) -
     return upload_id
 
 
-async def get_strava_upload(upload_id: str, access_token: str, statuses: dict):
+async def get_upload(upload_id: str, access_token: str, statuses: dict):
     url = f"https://www.strava.com/api/v3/uploads/{upload_id}"
     headers = {"Authorization": f"Bearer {access_token}"}
     while True:
@@ -64,7 +64,7 @@ async def get_strava_upload(upload_id: str, access_token: str, statuses: dict):
             return upload
 
 
-async def get_strava_activity(access_token: str, activity_id: str) -> str:
+async def get_activity(access_token: str, activity_id: str) -> str:
     url = f"https://www.strava.com/api/v3/activities/{activity_id}"
     headers = {"Authorization": f"Bearer {access_token}"}
     response = requests.get(url, headers=headers)
@@ -79,7 +79,7 @@ async def get_strava_activity(access_token: str, activity_id: str) -> str:
     return activity_params
 
 
-async def get_strava_gear(access_token: str) -> str:
+async def get_gear(access_token: str) -> str:
     url = "https://www.strava.com/api/v3/athlete"
     headers = {"Authorization": f"Bearer {access_token}"}
     response = requests.get(url, headers=headers)
@@ -95,9 +95,7 @@ async def get_strava_gear(access_token: str) -> str:
     return gear_list
 
 
-async def update_strava_activity(
-    access_token: str, activity_id: str, description: str = None, name: str = None, sport_type: str = None, gear_id: str = None
-) -> str:
+async def update_activity(access_token: str, activity_id: str, description: str = None, name: str = None, sport_type: str = None, gear_id: str = None) -> str:
     url = f"https://www.strava.com/api/v3/activities/{activity_id}"
     params = {
         key: value
@@ -123,7 +121,7 @@ async def update_strava_activity(
     return activity_params
 
 
-async def strava_deauthorize(access_token: str):
+async def deauthorize(access_token: str):
     url = "https://www.strava.com/oauth/deauthorize"
     headers = {"Authorization": f"Bearer {access_token}"}
     requests.post(url, headers=headers)
