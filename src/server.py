@@ -14,9 +14,7 @@ TOKEN = CONFIG["Telegram"]["BOT_TOKEN"]
 PORT = CONFIG["Server"]["PORT"]
 
 
-# Создаем класс обработчика запросов, наследуя от SimpleHTTPRequestHandler
 class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
-    # Переопределяем метод do_GET() на парсинг входящего url
     def do_GET(self):
         path = self.path
         incoming_params = {}
@@ -30,7 +28,7 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         self.send_header("Location", url)
         self.end_headers()
 
-        # Если scope соответствуют требуемым – добавляем пользователя в БД; если нет, сообщаем в чат об ошибке.
+        # Проверка выданных в Strava прав и создание пользователя
         if SCOPE in str(incoming_params["scope"]):
             USER_DB.upsert(
                 {
@@ -61,6 +59,6 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
             requests.post(url, params=params)
 
 
-# Создаем и запускаем TCPServer
+# Старт сервера
 tcp_server = TCPServer(("", int(PORT)), ParamsHTTPRequestHandler)
 BaseServer.serve_forever(tcp_server)

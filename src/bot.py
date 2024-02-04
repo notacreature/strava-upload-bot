@@ -394,7 +394,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-# Обработка прочего текста
+# Обработка прочих сообщений
 async def other(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         TEXT["reply_other"],
