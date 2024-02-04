@@ -71,6 +71,7 @@ async def get_strava_activity(access_token: str, activity_id: str) -> str:
     activity_params = {
         "name": response.json()["name"],
         "sport_type": response.json()["sport_type"],
+        "gear": response.json()["gear"]["name"],
         "moving_time": response.json()["moving_time"],
         "distance": response.json()["distance"],
         "description": response.json()["description"],
@@ -78,14 +79,33 @@ async def get_strava_activity(access_token: str, activity_id: str) -> str:
     return activity_params
 
 
-async def update_strava_activity(access_token: str, activity_id: str, name: str = None, description: str = None, sport_type: str = None) -> str:
+async def get_strava_gear(access_token: str) -> str:
+    url = "https://www.strava.com/api/v3/athlete"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = requests.get(url, headers=headers)
+    gear_list = []
+    shoes = response.json()["shoes"]
+    bikes = response.json()["bikes"]
+    for i in range(len(shoes)):
+        shoes[i]["type"] = "👟"
+        gear_list.append(shoes[i])
+    for i in range(len(bikes)):
+        bikes[i]["type"] = "🚲"
+        gear_list.append(bikes[i])
+    return gear_list
+
+
+async def update_strava_activity(
+    access_token: str, activity_id: str, description: str = None, name: str = None, sport_type: str = None, gear_id: str = None
+) -> str:
     url = f"https://www.strava.com/api/v3/activities/{activity_id}"
     params = {
         key: value
         for key, value in (
-            ("name", name),
             ("description", description),
+            ("name", name),
             ("sport_type", sport_type),
+            ("gear_id", gear_id),
         )
         if value is not None
     }
@@ -95,6 +115,7 @@ async def update_strava_activity(access_token: str, activity_id: str, name: str 
     activity_params = {
         "name": response.json()["name"],
         "sport_type": response.json()["sport_type"],
+        "gear": response.json()["gear"]["name"],
         "moving_time": response.json()["moving_time"],
         "distance": response.json()["distance"],
         "description": response.json()["description"],

@@ -24,6 +24,7 @@ from stravafunctions import (
     post_strava_activity,
     get_strava_upload,
     get_strava_activity,
+    get_strava_gear,
     update_strava_activity,
 )
 from dictionary import TEXT, URL, STATUS
@@ -152,7 +153,10 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [
                     InlineKeyboardButton(TEXT["key_chname"], callback_data="chname"),
                     InlineKeyboardButton(TEXT["key_chdesc"], callback_data="chdesc"),
+                ],
+                [
                     InlineKeyboardButton(TEXT["key_chtype"], callback_data="chtype"),
+                    InlineKeyboardButton(TEXT["key_chgear"], callback_data="chgear"),
                 ],
                 [
                     InlineKeyboardButton(TEXT["key_openstrava"], url=URL["activity"].format(activity_id)),
@@ -162,7 +166,7 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         activity = await get_strava_activity(access_token, activity_id)
         await update.message.reply_text(
             TEXT["reply_activityuploaded"].format(
-                activity["name"], activity["sport_type"], activity["moving_time"], activity["distance"], activity["description"]
+                activity["name"], activity["sport_type"], activity["gear"], activity["moving_time"], activity["distance"], activity["description"]
             ),
             constants.ParseMode.MARKDOWN,
             reply_markup=inline_keyboard,
@@ -235,6 +239,23 @@ async def chtype_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return "chtype_finish"
 
 
+async def chgear_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    access_token = context.user_data["access_token"]
+    gear_list = await get_strava_gear(access_token)
+    inline_keys = []
+    for gear in gear_list:
+        inline_keys.append([InlineKeyboardButton(gear["type"] + " " + gear["name"], callback_data=gear["id"])])
+    inline_keyboard = InlineKeyboardMarkup(inline_keys)
+    await query.edit_message_text(
+        TEXT["reply_chgear"],
+        constants.ParseMode.MARKDOWN,
+        reply_markup=inline_keyboard,
+    )
+    return "chgear_finish"
+
+
 async def chname_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.message.text
     access_token = context.user_data["access_token"]
@@ -246,7 +267,10 @@ async def chname_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [
                 InlineKeyboardButton(TEXT["key_chname"], callback_data="chname"),
                 InlineKeyboardButton(TEXT["key_chdesc"], callback_data="chdesc"),
+            ],
+            [
                 InlineKeyboardButton(TEXT["key_chtype"], callback_data="chtype"),
+                InlineKeyboardButton(TEXT["key_chgear"], callback_data="chgear"),
             ],
             [
                 InlineKeyboardButton(TEXT["key_openstrava"], url=URL["activity"].format(activity_id)),
@@ -254,7 +278,9 @@ async def chname_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     )
     await update.message.reply_text(
-        TEXT["reply_activityupdated"].format(activity["name"], activity["sport_type"], activity["moving_time"], activity["distance"], activity["description"]),
+        TEXT["reply_activityupdated"].format(
+            activity["name"], activity["sport_type"], activity["gear"], activity["moving_time"], activity["distance"], activity["description"]
+        ),
         constants.ParseMode.MARKDOWN,
         reply_markup=inline_keyboard,
     )
@@ -272,7 +298,10 @@ async def chdesc_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [
                 InlineKeyboardButton(TEXT["key_chname"], callback_data="chname"),
                 InlineKeyboardButton(TEXT["key_chdesc"], callback_data="chdesc"),
+            ],
+            [
                 InlineKeyboardButton(TEXT["key_chtype"], callback_data="chtype"),
+                InlineKeyboardButton(TEXT["key_chgear"], callback_data="chgear"),
             ],
             [
                 InlineKeyboardButton(TEXT["key_openstrava"], url=URL["activity"].format(activity_id)),
@@ -280,7 +309,9 @@ async def chdesc_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     )
     await update.message.reply_text(
-        TEXT["reply_activityupdated"].format(activity["name"], activity["sport_type"], activity["moving_time"], activity["distance"], activity["description"]),
+        TEXT["reply_activityupdated"].format(
+            activity["name"], activity["sport_type"], activity["gear"], activity["moving_time"], activity["distance"], activity["description"]
+        ),
         constants.ParseMode.MARKDOWN,
         reply_markup=inline_keyboard,
     )
@@ -299,7 +330,10 @@ async def chtype_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [
                 InlineKeyboardButton(TEXT["key_chname"], callback_data="chname"),
                 InlineKeyboardButton(TEXT["key_chdesc"], callback_data="chdesc"),
+            ],
+            [
                 InlineKeyboardButton(TEXT["key_chtype"], callback_data="chtype"),
+                InlineKeyboardButton(TEXT["key_chgear"], callback_data="chgear"),
             ],
             [
                 InlineKeyboardButton(TEXT["key_openstrava"], url=URL["activity"].format(activity_id)),
@@ -307,7 +341,41 @@ async def chtype_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     )
     await query.edit_message_text(
-        TEXT["reply_activityupdated"].format(activity["name"], activity["sport_type"], activity["moving_time"], activity["distance"], activity["description"]),
+        TEXT["reply_activityupdated"].format(
+            activity["name"], activity["sport_type"], activity["gear"], activity["moving_time"], activity["distance"], activity["description"]
+        ),
+        constants.ParseMode.MARKDOWN,
+        reply_markup=inline_keyboard,
+    )
+    return "upload_change"
+
+
+async def chgear_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    gear_id = update.callback_query.data
+    access_token = context.user_data["access_token"]
+    activity_id = context.user_data["activity_id"]
+    activity = await update_strava_activity(access_token, activity_id, gear_id=gear_id)
+
+    inline_keyboard = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(TEXT["key_chname"], callback_data="chname"),
+                InlineKeyboardButton(TEXT["key_chdesc"], callback_data="chdesc"),
+            ],
+            [
+                InlineKeyboardButton(TEXT["key_chtype"], callback_data="chtype"),
+                InlineKeyboardButton(TEXT["key_chgear"], callback_data="chgear"),
+            ],
+            [
+                InlineKeyboardButton(TEXT["key_openstrava"], url=URL["activity"].format(activity_id)),
+            ],
+        ]
+    )
+    await query.edit_message_text(
+        TEXT["reply_activityupdated"].format(
+            activity["name"], activity["sport_type"], activity["gear"], activity["moving_time"], activity["distance"], activity["description"]
+        ),
         constants.ParseMode.MARKDOWN,
         reply_markup=inline_keyboard,
     )
@@ -364,10 +432,12 @@ def main():
                 CallbackQueryHandler(chname_start, pattern="chname"),
                 CallbackQueryHandler(chdesc_start, pattern="chdesc"),
                 CallbackQueryHandler(chtype_start, pattern="chtype"),
+                CallbackQueryHandler(chgear_start, pattern="chgear"),
             ],
             "chname_finish": [MessageHandler(filters.TEXT, chname_finish)],
             "chdesc_finish": [MessageHandler(filters.TEXT, chdesc_finish)],
             "chtype_finish": [CallbackQueryHandler(chtype_finish, pattern="Swim|Ride|Run")],
+            "chgear_finish": [CallbackQueryHandler(chgear_finish, pattern="^\w\d+$")],
         },
         fallbacks=[cancel_fallback, file_entry, favorites_entry, delete_entry],
     )

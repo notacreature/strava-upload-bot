@@ -31,7 +31,7 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         self.end_headers()
 
         # Если scope соответствуют требуемым – добавляем пользователя в БД; если нет, сообщаем в чат об ошибке.
-        if str(incoming_params["scope"]) == SCOPE:
+        if SCOPE in str(incoming_params["scope"]):
             USER_DB.upsert(
                 {
                     "user_id": str(incoming_params["user_id"]),
