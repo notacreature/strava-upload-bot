@@ -10,19 +10,16 @@ def user_exists(user_id: str, db: TinyDB, query: Query) -> bool:
         return False
 
 
-async def get_refresh_token(user_id: str, client_id: str, client_secret: str, db: TinyDB, query: Query) -> str:
-    refresh_token = db.get(query["user_id"] == user_id)["refresh_token"]
-    if not refresh_token:
-        url = f"https://www.strava.com/api/v3/oauth/token"
-        code = db.get(query["user_id"] == user_id)["auth_code"]
-        params = {
-            "client_id": f"{client_id}",
-            "client_secret": f"{client_secret}",
-            "grant_type": "authorization_code",
-            "code": f"{code}",
-        }
-        response = requests.post(url, params=params)
-        refresh_token = response.json()["refresh_token"]
+def get_refresh_token(user_id: str, client_id: str, client_secret: str, code: str) -> str:
+    url = f"https://www.strava.com/api/v3/oauth/token"
+    params = {
+        "client_id": f"{client_id}",
+        "client_secret": f"{client_secret}",
+        "grant_type": "authorization_code",
+        "code": f"{code}",
+    }
+    response = requests.post(url, params=params)
+    refresh_token = response.json()["refresh_token"]
     return refresh_token
 
 

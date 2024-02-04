@@ -105,7 +105,7 @@ async def delete_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def delete_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.message.from_user.id)
-    refresh_token = await strava.get_refresh_token(user_id, CLIENT_ID, CLIENT_SECRET, USER_DB, USER_QUERY)
+    refresh_token = USER_DB.get(USER_QUERY["user_id"] == user_id)["refresh_token"]
     access_token = await strava.get_access_token(user_id, CLIENT_ID, CLIENT_SECRET, refresh_token, USER_DB, USER_QUERY)
     await strava.deauthorize(access_token)
     USER_DB.remove(USER_QUERY["user_id"] == user_id)
@@ -131,7 +131,7 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_data = await context.bot.get_file(file_id)
     data_type = str.split(update.message.document.file_name, ".")[-1]
     file = requests.get(file_data.file_path).content
-    refresh_token = await strava.get_refresh_token(user_id, CLIENT_ID, CLIENT_SECRET, USER_DB, USER_QUERY)
+    refresh_token = USER_DB.get(USER_QUERY["user_id"] == user_id)["refresh_token"]
     access_token = await strava.get_access_token(user_id, CLIENT_ID, CLIENT_SECRET, refresh_token, USER_DB, USER_QUERY)
     context.user_data["access_token"] = access_token
 
