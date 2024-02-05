@@ -433,17 +433,17 @@ def main():
             "chtype_finish": [CallbackQueryHandler(chtype_finish, pattern="Swim|Ride|Run")],
             "chgear_finish": [CallbackQueryHandler(chgear_finish, pattern="^\w\d+$")],
         },
-        fallbacks=[cancel_fallback],
+        fallbacks=[cancel_fallback, file_entry, favorites_entry, delete_entry],
     )
     favorites_dialog = ConversationHandler(
         entry_points=[favorites_entry],
         states={"favorites_finish": [MessageHandler(~filters.COMMAND & filters.TEXT, favorites_finish)]},
-        fallbacks=[cancel_fallback],
+        fallbacks=[cancel_fallback, file_entry, favorites_entry, delete_entry],
     )
     delete_dialog = ConversationHandler(
         entry_points=[delete_entry],
         states={"delete_finish": [CommandHandler("delete", delete_finish)]},
-        fallbacks=[cancel_fallback],
+        fallbacks=[cancel_fallback, file_entry, favorites_entry, delete_entry],
     )
 
     application.add_handlers(
