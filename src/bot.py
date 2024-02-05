@@ -166,14 +166,7 @@ async def upload_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=inline_keyboard,
         )
         return "upload_change"
-    elif status == STATUS["error"]:
-        await update.message.reply_text(
-            TEXT["reply_error"].format(status),
-            constants.ParseMode.MARKDOWN,
-            reply_markup=ReplyKeyboardRemove(),
-        )
-        return ConversationHandler.END
-    elif status == STATUS["deleted"]:
+    else:
         await update.message.reply_text(
             TEXT["reply_error"].format(status),
             constants.ParseMode.MARKDOWN,
