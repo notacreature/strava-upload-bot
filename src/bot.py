@@ -73,16 +73,17 @@ class KeyboardFormatter:
         )
 
     @staticmethod
-    def format_list_keyboard(keys: dict) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup(
+    def format_list_keyboard(keys: dict, activity_list: list) -> InlineKeyboardMarkup:
+        inline_keys = [
             [
-                [
-                    InlineKeyboardButton(keys["key_prev"], callback_data="PrevPage"),
-                    InlineKeyboardButton(keys["key_refresh"], callback_data="Refresh"),
-                    InlineKeyboardButton(keys["key_next"], callback_data="NextPage"),
-                ]
+                InlineKeyboardButton(keys["key_prev"], callback_data="PrevPage"),
+                InlineKeyboardButton(keys["key_refresh"], callback_data="Refresh"),
+                InlineKeyboardButton(keys["key_next"], callback_data="NextPage"),
             ]
-        )
+        ]
+        for activity in activity_list:
+            inline_keys.insert(-1, [InlineKeyboardButton(TEXT["key_activity"].format(activity["name"], activity["date"]), callback_data=activity["id"])])
+        return InlineKeyboardMarkup(inline_keys)
 
 
 # /start; регистрация
@@ -195,19 +196,9 @@ async def refresh_activities(update: Update, context: ContextTypes.DEFAULT_TYPE)
     page = context.user_data["page"]
     activity_list = await strava.get_activities(access_token, page, PER_PAGE)
 
-    inline_keys = [
-        [
-            InlineKeyboardButton(TEXT["key_prev"], callback_data="PrevPage"),
-            InlineKeyboardButton(TEXT["key_refresh"], callback_data="Refresh"),
-            InlineKeyboardButton(TEXT["key_next"], callback_data="NextPage"),
-        ]
-    ]
-    for activity in activity_list:
-        inline_keys.insert(-1, [InlineKeyboardButton(TEXT["key_activity"].format(activity["name"], activity["date"]), callback_data=activity["id"])])
-    inline_keyboard = InlineKeyboardMarkup(inline_keys)
-
-    await update.callback_query.edit_message_reply_markup(reply_markup=None)
-    await update.callback_query.edit_message_reply_markup(reply_markup=inline_keyboard)
+    # зачем здесь дублирование вывода клавиатуры?
+    # await update.callback_query.edit_message_reply_markup(reply_markup=None)
+    await update.callback_query.edit_message_reply_markup(reply_markup=KeyboardFormatter.format_list_keyboard(activity_list, TEXT))
     return "activities_shown"
 
 
