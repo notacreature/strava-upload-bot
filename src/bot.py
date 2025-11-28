@@ -1,3 +1,8 @@
+# TODO заменить строки в callback_data на структурированные, "data:чётотам" и/или "action:чётотам" (внимательно для regexp и chtype)
+# TODO объединить refresh и пейджинг
+# TODO привести к общему виду обновление данных в context.user_data
+# TODO абстрагировать inline_keyboard для пейджинга
+
 import os, requests, configparser, strava
 from tinydb import TinyDB, Query
 from telegram import (
@@ -29,16 +34,16 @@ USER_QUERY = Query()
 PER_PAGE = 4
 
 
-class ActivityFormatter:
+class KeyboardFormatter:
     @staticmethod
-    def format_data(format: str, url: str, activity: dict) -> str:
+    def format_activity_data(format: str, url: str, activity: dict) -> str:
         activity_link = url.format(activity["id"])
         return format.format(
             activity["name"], activity["sport_type"], activity["moving_time"], activity["distance"], activity["gear"], activity["description"], activity_link
         )
 
     @staticmethod
-    def format_keyboard(keys: dict) -> InlineKeyboardMarkup:
+    def format_edit_keyboard(keys: dict) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(
             [
                 [
@@ -52,6 +57,30 @@ class ActivityFormatter:
                 [
                     InlineKeyboardButton(keys["key_activities"], callback_data="List"),
                 ],
+            ]
+        )
+
+    @staticmethod
+    def format_type_keyboard(keys: dict) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(keys["key_swim"], callback_data="Swim"),
+                    InlineKeyboardButton(keys["key_ride"], callback_data="Ride"),
+                    InlineKeyboardButton(keys["key_run"], callback_data="Run"),
+                ]
+            ]
+        )
+
+    @staticmethod
+    def format_list_keyboard(keys: dict) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(keys["key_prev"], callback_data="PrevPage"),
+                    InlineKeyboardButton(keys["key_refresh"], callback_data="Refresh"),
+                    InlineKeyboardButton(keys["key_next"], callback_data="NextPage"),
+                ]
             ]
         )
 
@@ -163,7 +192,7 @@ async def show_activities(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def refresh_activities(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     access_token = context.user_data["access_token"]
-    page = context.user_data["page"] = 1
+    page = context.user_data["page"]
     activity_list = await strava.get_activities(access_token, page, PER_PAGE)
 
     inline_keys = [
@@ -236,9 +265,9 @@ async def show_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     activity = await strava.get_activity(access_token, activity_id)
 
     await update.callback_query.edit_message_text(
-        ActivityFormatter.format_data(TEXT["reply_activity_shown"], URL["activity"], activity),
+        KeyboardFormatter.format_activity_data(TEXT["reply_activity_shown"], URL["activity"], activity),
         constants.ParseMode.MARKDOWN,
-        reply_markup=ActivityFormatter.format_keyboard(TEXT),
+        reply_markup=KeyboardFormatter.format_edit_keyboard(TEXT),
     )
     return "activity_shown"
 
@@ -270,9 +299,9 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
         activity = await strava.get_activity(access_token, activity_id)
 
         await update.message.reply_text(
-            ActivityFormatter.format_data(TEXT["reply_activity_uploaded"], URL["activity"], activity),
+            KeyboardFormatter.format_activity_data(TEXT["reply_activity_uploaded"], URL["activity"], activity),
             constants.ParseMode.MARKDOWN,
-            reply_markup=ActivityFormatter.format_keyboard(TEXT),
+            reply_markup=KeyboardFormatter.format_edit_keyboard(TEXT),
         )
         return "activity_shown"
     else:
@@ -308,19 +337,11 @@ async def change_desc_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def change_type_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
-    inline_keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(TEXT["key_swim"], callback_data="Swim"),
-                InlineKeyboardButton(TEXT["key_ride"], callback_data="Ride"),
-                InlineKeyboardButton(TEXT["key_run"], callback_data="Run"),
-            ]
-        ]
-    )
+
     await update.callback_query.edit_message_text(
         TEXT["reply_change_type"],
         constants.ParseMode.MARKDOWN,
-        reply_markup=inline_keyboard,
+        reply_markup=KeyboardFormatter.format_type_keyboard(TEXT),
     )
     return "change_type_dialog"
 
@@ -353,9 +374,9 @@ async def change_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     activity = await strava.get_activity(access_token, activity_id)
 
     await update.message.reply_text(
-        ActivityFormatter.format_data(TEXT["reply_activity_updated"], URL["activity"], activity),
+        KeyboardFormatter.format_activity_data(TEXT["reply_activity_updated"], URL["activity"], activity),
         constants.ParseMode.MARKDOWN,
-        reply_markup=ActivityFormatter.format_keyboard(TEXT),
+        reply_markup=KeyboardFormatter.format_edit_keyboard(TEXT),
     )
     return "activity_shown"
 
@@ -368,9 +389,9 @@ async def change_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     activity = await strava.get_activity(access_token, activity_id)
 
     await update.message.reply_text(
-        ActivityFormatter.format_data(TEXT["reply_activity_updated"], URL["activity"], activity),
+        KeyboardFormatter.format_activity_data(TEXT["reply_activity_updated"], URL["activity"], activity),
         constants.ParseMode.MARKDOWN,
-        reply_markup=ActivityFormatter.format_keyboard(TEXT),
+        reply_markup=KeyboardFormatter.format_edit_keyboard(TEXT),
     )
     return "activity_shown"
 
@@ -384,9 +405,9 @@ async def change_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     activity = await strava.get_activity(access_token, activity_id)
 
     await update.callback_query.edit_message_text(
-        ActivityFormatter.format_data(TEXT["reply_activity_updated"], URL["activity"], activity),
+        KeyboardFormatter.format_activity_data(TEXT["reply_activity_updated"], URL["activity"], activity),
         constants.ParseMode.MARKDOWN,
-        reply_markup=ActivityFormatter.format_keyboard(TEXT),
+        reply_markup=KeyboardFormatter.format_edit_keyboard(TEXT),
     )
     return "activity_shown"
 
@@ -400,9 +421,9 @@ async def change_gear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     activity = await strava.get_activity(access_token, activity_id)
 
     await update.callback_query.edit_message_text(
-        ActivityFormatter.format_data(TEXT["reply_activity_updated"], URL["activity"], activity),
+        KeyboardFormatter.format_activity_data(TEXT["reply_activity_updated"], URL["activity"], activity),
         constants.ParseMode.MARKDOWN,
-        reply_markup=ActivityFormatter.format_keyboard(TEXT),
+        reply_markup=KeyboardFormatter.format_edit_keyboard(TEXT),
     )
     return "activity_shown"
 
