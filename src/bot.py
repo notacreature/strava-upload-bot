@@ -48,12 +48,12 @@ class KeyboardFormatter:
         return InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton(keys["key_change_name"], callback_data="Chname"),
-                    InlineKeyboardButton(keys["key_change_desc"], callback_data="Chdesc"),
+                    InlineKeyboardButton(keys["key_edit_name"], callback_data="EditName"),
+                    InlineKeyboardButton(keys["key_edit_desc"], callback_data="EditDesc"),
                 ],
                 [
-                    InlineKeyboardButton(keys["key_change_type"], callback_data="Chtype"),
-                    InlineKeyboardButton(keys["key_change_gear"], callback_data="Chgear"),
+                    InlineKeyboardButton(keys["key_edit_type"], callback_data="EditType"),
+                    InlineKeyboardButton(keys["key_edit_gear"], callback_data="EditGear"),
                 ],
                 [
                     InlineKeyboardButton(keys["key_activities"], callback_data="List"),
@@ -74,15 +74,21 @@ class KeyboardFormatter:
         )
 
     @staticmethod
-    def format_list_keyboard(keys: dict, activity_list: list) -> InlineKeyboardMarkup:
-        inline_keys = [
-            [
-                InlineKeyboardButton(keys["key_prev"], callback_data="PrevPage"),
-                InlineKeyboardButton(keys["key_refresh"], callback_data="Refresh"),
-                InlineKeyboardButton(keys["key_next"], callback_data="NextPage"),
-            ]
-        ]
-        for activity in activity_list:
+    def format_list_keyboard(keys: dict, page: int, per_page: int, activities: list) -> InlineKeyboardMarkup:
+        inline_keys = [[]]
+
+        if page == 1:
+            inline_keys[0].append(InlineKeyboardButton(keys["key_refresh"], callback_data="Refresh"))
+            inline_keys[0].append(InlineKeyboardButton(keys["key_next"], callback_data="NextPage"))
+        elif page > 1:
+            if len(activities) == per_page:
+                inline_keys[0].append(InlineKeyboardButton(keys["key_prev"], callback_data="PrevPage"))
+                inline_keys[0].append(InlineKeyboardButton(keys["key_next"], callback_data="NextPage"))
+            elif len(activities) < per_page:
+                inline_keys[0].append(InlineKeyboardButton(keys["key_prev"], callback_data="PrevPage"))
+                inline_keys[0].append(InlineKeyboardButton(keys["key_refresh"], callback_data="Refresh"))
+
+        for activity in activities:
             inline_keys.insert(-1, [InlineKeyboardButton(TEXT["key_activity"].format(activity["name"], activity["date"]), callback_data=activity["id"])])
         return InlineKeyboardMarkup(inline_keys)
 
@@ -168,13 +174,13 @@ async def show_activities(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             TEXT["reply_activities_shown"],
             constants.ParseMode.MARKDOWN,
-            reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, activity_list),
+            reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, page, PER_PAGE, activity_list),
         )
     elif update.callback_query:
         await update.callback_query.edit_message_text(
             TEXT["reply_activities_shown"],
             constants.ParseMode.MARKDOWN,
-            reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, activity_list),
+            reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, page, PER_PAGE, activity_list),
         )
     return "activities_shown"
 
@@ -191,7 +197,7 @@ async def update_activities(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     activity_list = await strava.get_activities(access_token, page, PER_PAGE)
 
-    await update.callback_query.edit_message_reply_markup(reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, activity_list))
+    await update.callback_query.edit_message_reply_markup(reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, page, PER_PAGE, activity_list))
     return "activities_shown"
 
 
@@ -251,40 +257,40 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # Редактирование тренировки
-async def change_name_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def edit_name_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     user_id = str(update.callback_query.from_user.id)
     await context.bot.send_message(
         user_id,
-        TEXT["reply_change_name"],
+        TEXT["reply_edit_name"],
         constants.ParseMode.MARKDOWN,
     )
-    return "change_name_dialog"
+    return "edit_name_dialog"
 
 
-async def change_desc_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def edit_desc_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     user_id = str(update.callback_query.from_user.id)
     await context.bot.send_message(
         user_id,
-        TEXT["reply_change_desc"],
+        TEXT["reply_edit_desc"],
         constants.ParseMode.MARKDOWN,
     )
-    return "change_desc_dialog"
+    return "edit_desc_dialog"
 
 
-async def change_type_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def edit_type_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
 
     await update.callback_query.edit_message_text(
-        TEXT["reply_change_type"],
+        TEXT["reply_edit_type"],
         constants.ParseMode.MARKDOWN,
         reply_markup=KeyboardFormatter.format_type_keyboard(TEXT),
     )
-    return "change_type_dialog"
+    return "edit_type_dialog"
 
 
-async def change_gear_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def edit_gear_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     access_token = context.user_data["access_token"]
     gear_list = await strava.get_gear(access_token)
@@ -297,14 +303,14 @@ async def change_gear_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
     inline_keyboard = InlineKeyboardMarkup(inline_keys)
     await update.callback_query.edit_message_text(
-        TEXT["reply_change_gear"],
+        TEXT["reply_edit_gear"],
         constants.ParseMode.MARKDOWN,
         reply_markup=inline_keyboard,
     )
-    return "change_gear_dialog"
+    return "edit_gear_dialog"
 
 
-async def change_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def edit_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     access_token = context.user_data["access_token"]
     activity_id = context.user_data["activity_id"]
     name = update.message.text
@@ -319,7 +325,7 @@ async def change_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return "activity_shown"
 
 
-async def change_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def edit_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     access_token = context.user_data["access_token"]
     activity_id = context.user_data["activity_id"]
     description = update.message.text
@@ -334,7 +340,7 @@ async def change_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return "activity_shown"
 
 
-async def change_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def edit_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     access_token = context.user_data["access_token"]
     activity_id = context.user_data["activity_id"]
@@ -350,7 +356,7 @@ async def change_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return "activity_shown"
 
 
-async def change_gear(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def edit_gear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     access_token = context.user_data["access_token"]
     activity_id = context.user_data["activity_id"]
@@ -420,15 +426,15 @@ def main():
             ],
             "activity_shown": [
                 CallbackQueryHandler(show_activities, pattern="List"),
-                CallbackQueryHandler(change_name_dialog, pattern="Chname"),
-                CallbackQueryHandler(change_desc_dialog, pattern="Chdesc"),
-                CallbackQueryHandler(change_type_dialog, pattern="Chtype"),
-                CallbackQueryHandler(change_gear_dialog, pattern="Chgear"),
+                CallbackQueryHandler(edit_name_dialog, pattern="EditName"),
+                CallbackQueryHandler(edit_desc_dialog, pattern="EditDesc"),
+                CallbackQueryHandler(edit_type_dialog, pattern="EditType"),
+                CallbackQueryHandler(edit_gear_dialog, pattern="EditGear"),
             ],
-            "change_name_dialog": [MessageHandler(~filters.COMMAND & filters.TEXT, change_name)],
-            "change_desc_dialog": [MessageHandler(~filters.COMMAND & filters.TEXT, change_desc)],
-            "change_type_dialog": [CallbackQueryHandler(change_type, pattern="Swim|Ride|Run")],
-            "change_gear_dialog": [CallbackQueryHandler(change_gear, pattern="^\\w\\d+$")],
+            "edit_name_dialog": [MessageHandler(~filters.COMMAND & filters.TEXT, edit_name)],
+            "edit_desc_dialog": [MessageHandler(~filters.COMMAND & filters.TEXT, edit_desc)],
+            "edit_type_dialog": [CallbackQueryHandler(edit_type, pattern="Swim|Ride|Run")],
+            "edit_gear_dialog": [CallbackQueryHandler(edit_gear, pattern="^\\w\\d+$")],
         },
         fallbacks=[
             cancel_fallback,
