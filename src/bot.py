@@ -163,30 +163,18 @@ async def show_activities(update: Update, context: ContextTypes.DEFAULT_TYPE):
     page = context.user_data["page"] = 1
     activity_list = await strava.get_activities(access_token, page, PER_PAGE)
 
-    inline_keys = [
-        [
-            InlineKeyboardButton(TEXT["key_prev"], callback_data="PrevPage"),
-            InlineKeyboardButton(TEXT["key_refresh"], callback_data="Refresh"),
-            InlineKeyboardButton(TEXT["key_next"], callback_data="NextPage"),
-        ]
-    ]
-    for activity in activity_list:
-        inline_keys.insert(-1, [InlineKeyboardButton(TEXT["key_activity"].format(activity["name"], activity["date"]), callback_data=activity["id"])])
-    inline_keyboard = InlineKeyboardMarkup(inline_keys)
-
     if update.message:
         await update.message.reply_text(
             TEXT["reply_activities_shown"],
             constants.ParseMode.MARKDOWN,
-            reply_markup=inline_keyboard,
+            reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, activity_list),
         )
     elif update.callback_query:
         await update.callback_query.edit_message_text(
             TEXT["reply_activities_shown"],
             constants.ParseMode.MARKDOWN,
-            reply_markup=inline_keyboard,
+            reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, activity_list),
         )
-
     return "activities_shown"
 
 
@@ -196,9 +184,7 @@ async def refresh_activities(update: Update, context: ContextTypes.DEFAULT_TYPE)
     page = context.user_data["page"]
     activity_list = await strava.get_activities(access_token, page, PER_PAGE)
 
-    # зачем здесь дублирование вывода клавиатуры?
-    # await update.callback_query.edit_message_reply_markup(reply_markup=None)
-    await update.callback_query.edit_message_reply_markup(reply_markup=KeyboardFormatter.format_list_keyboard(activity_list, TEXT))
+    await update.callback_query.edit_message_reply_markup(reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, activity_list))
     return "activities_shown"
 
 
@@ -209,19 +195,7 @@ async def show_next_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
     page = context.user_data["page"] = page + 1
     activity_list = await strava.get_activities(access_token, page, PER_PAGE)
 
-    inline_keys = [
-        [
-            InlineKeyboardButton(TEXT["key_prev"], callback_data="PrevPage"),
-            InlineKeyboardButton(TEXT["key_refresh"], callback_data="Refresh"),
-            InlineKeyboardButton(TEXT["key_next"], callback_data="NextPage"),
-        ]
-    ]
-    for activity in activity_list:
-        inline_keys.insert(-1, [InlineKeyboardButton(TEXT["key_activity"].format(activity["name"], activity["date"]), callback_data=activity["id"])])
-    inline_keyboard = InlineKeyboardMarkup(inline_keys)
-
-    await update.callback_query.edit_message_reply_markup(reply_markup=None)
-    await update.callback_query.edit_message_reply_markup(reply_markup=inline_keyboard)
+    await update.callback_query.edit_message_reply_markup(reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, activity_list))
     return "activities_shown"
 
 
@@ -232,19 +206,7 @@ async def show_prev_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
     page = context.user_data["page"] = page - 1 if page > 1 else 1
     activity_list = await strava.get_activities(access_token, page, PER_PAGE)
 
-    inline_keys = [
-        [
-            InlineKeyboardButton(TEXT["key_prev"], callback_data="PrevPage"),
-            InlineKeyboardButton(TEXT["key_refresh"], callback_data="Refresh"),
-            InlineKeyboardButton(TEXT["key_next"], callback_data="NextPage"),
-        ]
-    ]
-    for activity in activity_list:
-        inline_keys.insert(-1, [InlineKeyboardButton(TEXT["key_activity"].format(activity["name"], activity["date"]), callback_data=activity["id"])])
-    inline_keyboard = InlineKeyboardMarkup(inline_keys)
-
-    await update.callback_query.edit_message_reply_markup(reply_markup=None)
-    await update.callback_query.edit_message_reply_markup(reply_markup=inline_keyboard)
+    await update.callback_query.edit_message_reply_markup(reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, activity_list))
     return "activities_shown"
 
 
