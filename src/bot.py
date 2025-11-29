@@ -1,7 +1,8 @@
 # TODO заменить строки в callback_data на структурированные, "data:чётотам" и/или "action:чётотам" (внимательно для regexp и chtype)
-# TODO объединить refresh и пейджинг
+# DONE объединить refresh и пейджинг
 # TODO привести к общему виду обновление данных в context.user_data
-# TODO абстрагировать inline_keyboard для пейджинга
+# DONE абстрагировать inline_keyboard для пейджинга
+# TODO заменить change/ch на edit
 
 import os, requests, configparser, strava
 from tinydb import TinyDB, Query
@@ -178,32 +179,16 @@ async def show_activities(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return "activities_shown"
 
 
-async def refresh_activities(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def update_activities(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     access_token = context.user_data["access_token"]
     page = context.user_data["page"]
-    activity_list = await strava.get_activities(access_token, page, PER_PAGE)
 
-    await update.callback_query.edit_message_reply_markup(reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, activity_list))
-    return "activities_shown"
+    if update.callback_query.data == "PrevPage":
+        page = context.user_data["page"] = page - 1 if page > 1 else 1
+    elif update.callback_query.data == "NextPage":
+        page = context.user_data["page"] = page + 1
 
-
-async def show_next_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    access_token = context.user_data["access_token"]
-    page = context.user_data["page"]
-    page = context.user_data["page"] = page + 1
-    activity_list = await strava.get_activities(access_token, page, PER_PAGE)
-
-    await update.callback_query.edit_message_reply_markup(reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, activity_list))
-    return "activities_shown"
-
-
-async def show_prev_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    access_token = context.user_data["access_token"]
-    page = context.user_data["page"]
-    page = context.user_data["page"] = page - 1 if page > 1 else 1
     activity_list = await strava.get_activities(access_token, page, PER_PAGE)
 
     await update.callback_query.edit_message_reply_markup(reply_markup=KeyboardFormatter.format_list_keyboard(TEXT, activity_list))
@@ -431,9 +416,7 @@ def main():
         states={
             "activities_shown": [
                 CallbackQueryHandler(show_activity, pattern="^\\d+$"),
-                CallbackQueryHandler(refresh_activities, pattern="Refresh"),
-                CallbackQueryHandler(show_next_page, pattern="NextPage"),
-                CallbackQueryHandler(show_prev_page, pattern="PrevPage"),
+                CallbackQueryHandler(update_activities, pattern="Refresh|NextPage|PrevPage"),
             ],
             "activity_shown": [
                 CallbackQueryHandler(show_activities, pattern="List"),
