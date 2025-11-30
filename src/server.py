@@ -1,6 +1,6 @@
 import os, configparser, requests, strava
 from http import server
-from socketserver import BaseServer, TCPServer
+from socketserver import TCPServer
 from tinydb import TinyDB, Query
 from dictionary import TEXT, URL
 
@@ -28,7 +28,7 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         code = str(incoming_params["code"])
         user_id = str(incoming_params["user_id"])
 
-        self.send_response(301)
+        self.send_response(303)
         self.send_header("Location", BOT_URL)
         self.end_headers()
 
@@ -62,4 +62,4 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
 
 # Старт сервера
 tcp_server = TCPServer(("", int(PORT)), ParamsHTTPRequestHandler)
-BaseServer.serve_forever(tcp_server)
+tcp_server.serve_forever()
