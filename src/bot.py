@@ -178,7 +178,7 @@ async def show_activities(update: Update, context: ContextTypes.DEFAULT_TYPE):
     refresh_token = USER_DB.get(USER_QUERY["user_id"] == user_id)["refresh_token"]
     access_token = await strava.get_access_token(user_id, CLIENT_ID, CLIENT_SECRET, refresh_token, USER_DB, USER_QUERY)
     context.user_data["access_token"] = access_token
-    page = context.user_data["page"] = 1
+    context.user_data["page"] = page = 1
     activity_list = await strava.get_activities(access_token, page, PER_PAGE)
 
     if update.message:
@@ -202,9 +202,9 @@ async def update_activities(update: Update, context: ContextTypes.DEFAULT_TYPE):
     page = context.user_data["page"]
 
     if update.callback_query.data == "PrevPage":
-        page = context.user_data["page"] = page - 1 if page > 1 else 1
+        context.user_data["page"] = page = page - 1 if page > 1 else 1
     elif update.callback_query.data == "NextPage":
-        page = context.user_data["page"] = page + 1
+        context.user_data["page"] = page = page + 1
 
     activity_list = await strava.get_activities(access_token, page, PER_PAGE)
 
@@ -214,8 +214,7 @@ async def update_activities(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
-    activity_id = update.callback_query.data
-    context.user_data["activity_id"] = activity_id
+    context.user_data["activity_id"] = activity_id = update.callback_query.data
     access_token = context.user_data["access_token"]
     activity = await strava.get_activity(access_token, activity_id)
 
@@ -248,8 +247,7 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     upload_id = await strava.post_activity(access_token, name, data_type, file)
     upload = await strava.get_upload(upload_id, access_token)
 
-    activity_id = upload["activity_id"]
-    context.user_data["activity_id"] = activity_id
+    context.user_data["activity_id"] = activity_id = upload["activity_id"]
     if activity_id:
         activity = await strava.get_activity(access_token, activity_id)
 
