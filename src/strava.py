@@ -2,12 +2,32 @@ import requests, time
 from tinydb import TinyDB, Query
 
 
+def normalize_activity(raw_activity: dict):
+    moving_time_seconds = raw_activity["moving_time"]
+    distance_meters = raw_activity["distance"]
+    moving_time = time.strftime("%H:%M:%S", time.gmtime(moving_time_seconds))
+    distance = round(distance_meters / 1000, 3)
+
+    normalized_activity = {
+        "id": str(raw_activity["id"]),
+        "name": str(raw_activity["name"]),
+        "sport_type": str(raw_activity["sport_type"]),
+        "moving_time": moving_time,
+        "distance": distance,
+        "description": str(raw_activity["description"]),
+        "gear": raw_activity["gear_id"],
+    }
+    if normalized_activity["gear"]:
+        normalized_activity["gear"] = str(raw_activity["gear"]["name"])
+    return normalized_activity
+
+
 def user_exists(user_id: str, db: TinyDB, query: Query) -> bool:
     user = db.get(query["user_id"] == user_id)
     return bool(user)
 
 
-def get_refresh_token(client_id: str, client_secret: str, code: str) -> str:
+async def get_refresh_token(client_id: str, client_secret: str, code: str) -> str:
     url = "https://www.strava.com/api/v3/oauth/token"
     params = {
         "client_id": f"{client_id}",
@@ -35,6 +55,56 @@ async def get_access_token(user_id: str, client_id: str, client_secret: str, ref
     db.update({"refresh_token": str(refresh_token)}, query["user_id"] == user_id)
     access_token = str(response_data["access_token"])
     return access_token
+
+
+async def get_activities(access_token: str, page: int, per_page: int) -> list:
+    url = "https://www.strava.com/api/v3/athlete/activities"
+    params = {
+        "page": page,
+        "per_page": per_page,
+    }
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = requests.get(url, params=params, headers=headers)
+    response_data = response.json()
+
+    activities = []
+    for activity in response_data:
+        date = time.strftime("%a %d.%m.%y %H:%M", (time.strptime(activity["start_date_local"], "%Y-%m-%dT%H:%M:%SZ")))
+        normalized_activity = {
+            "id": activity["id"],
+            "name": activity["name"],
+            "date": date,
+        }
+        activities.append(normalized_activity)
+    return activities
+
+
+async def get_activity(activity_id: str, access_token: str) -> dict:
+    url = f"https://www.strava.com/api/v3/activities/{activity_id}"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = requests.get(url, headers=headers)
+    response_data = response.json()
+    activity = normalize_activity(response_data)
+    return activity
+
+
+async def update_activity(activity_id: str, access_token: str, description: str = None, name: str = None, sport_type: str = None, gear_id: str = None) -> dict:
+    url = f"https://www.strava.com/api/v3/activities/{activity_id}"
+    params = {
+        key: value
+        for key, value in (
+            ("description", description),
+            ("name", name),
+            ("sport_type", sport_type),
+            ("gear_id", gear_id),
+        )
+        if value is not None
+    }
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = requests.put(url, params=params, headers=headers)
+    response_data = response.json()
+    activity = normalize_activity(response_data)
+    return activity
 
 
 async def post_activity(access_token: str, name: str, data_type: str, file: bytes) -> str:
@@ -70,54 +140,6 @@ async def get_upload(upload_id: str, access_token: str):
         delay *= 2
 
 
-async def get_activity(activity_id: str, access_token: str) -> dict:
-    url = f"https://www.strava.com/api/v3/activities/{activity_id}"
-    headers = {"Authorization": f"Bearer {access_token}"}
-    response = requests.get(url, headers=headers)
-    response_data = response.json()
-
-    moving_time_seconds = response_data["moving_time"]
-    distance_meters = response_data["distance"]
-
-    moving_time = time.strftime("%H:%M:%S", time.gmtime(moving_time_seconds))
-    distance = round(distance_meters / 1000, 3)
-
-    normalized_activity = {
-        "id": str(response_data["id"]),
-        "name": str(response_data["name"]),
-        "sport_type": str(response_data["sport_type"]),
-        "moving_time": moving_time,
-        "distance": distance,
-        "description": str(response_data["description"]),
-        "gear": response_data["gear_id"],
-    }
-    if normalized_activity["gear"]:
-        normalized_activity["gear"] = str(response_data["gear"]["name"])
-    return normalized_activity
-
-
-async def get_activities(access_token: str, page: int, per_page: int) -> list:
-    url = "https://www.strava.com/api/v3/athlete/activities"
-    params = {
-        "page": page,
-        "per_page": per_page,
-    }
-    headers = {"Authorization": f"Bearer {access_token}"}
-    response = requests.get(url, params=params, headers=headers)
-    response_data = response.json()
-
-    activity_list = []
-    for activity in response_data:
-        date = time.strftime("%a %d.%m.%y %H:%M", (time.strptime(activity["start_date_local"], "%Y-%m-%dT%H:%M:%SZ")))
-        normalized_activity = {
-            "id": activity["id"],
-            "name": activity["name"],
-            "date": date,
-        }
-        activity_list.append(normalized_activity)
-    return activity_list
-
-
 async def get_gear(access_token: str) -> list:
     url = "https://www.strava.com/api/v3/athlete"
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -134,23 +156,6 @@ async def get_gear(access_token: str) -> list:
         gear["type"] = "🚲"
         gear_list.append(gear)
     return gear_list
-
-
-async def update_activity(activity_id: str, access_token: str, description: str = None, name: str = None, sport_type: str = None, gear_id: str = None) -> dict:
-    url = f"https://www.strava.com/api/v3/activities/{activity_id}"
-    params = {
-        key: value
-        for key, value in (
-            ("description", description),
-            ("name", name),
-            ("sport_type", sport_type),
-            ("gear_id", gear_id),
-        )
-        if value is not None
-    }
-    headers = {"Authorization": f"Bearer {access_token}"}
-    response = requests.put(url, params=params, headers=headers)
-    return response
 
 
 async def deauthorize(access_token: str):
