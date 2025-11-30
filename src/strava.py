@@ -27,7 +27,7 @@ def user_exists(user_id: str, db: TinyDB, query: Query) -> bool:
     return bool(user)
 
 
-async def get_refresh_token(client_id: str, client_secret: str, code: str) -> str:
+def get_refresh_token(client_id: str, client_secret: str, code: str) -> str:
     url = "https://www.strava.com/api/v3/oauth/token"
     params = {
         "client_id": f"{client_id}",
