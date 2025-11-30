@@ -1,7 +1,6 @@
 import os, configparser, requests, strava
 from http import server
 from urllib import parse
-from socketserver import TCPServer
 from tinydb import TinyDB, Query
 from dictionary import TEXT, URL
 
@@ -58,5 +57,5 @@ class AuthRequestHandler(server.SimpleHTTPRequestHandler):
 
 
 # Старт сервера
-tcp_server = TCPServer(("", int(PORT)), AuthRequestHandler)
-tcp_server.serve_forever()
+auth_server = server.ThreadingHTTPServer(("", int(PORT)), AuthRequestHandler)
+auth_server.serve_forever()
