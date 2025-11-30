@@ -1,5 +1,6 @@
 import os, configparser, requests, strava
 from http import server
+from urllib import parse
 from socketserver import TCPServer
 from tinydb import TinyDB, Query
 from dictionary import TEXT, URL
@@ -16,24 +17,20 @@ TOKEN = CONFIG["Telegram"]["BOT_TOKEN"]
 PORT = CONFIG["Server"]["PORT"]
 
 
-class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
+class AuthRequestHandler(server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        path = self.path
-        incoming_params = {}
-        if "?" in path:
-            path, query = path.split("?", 1)
-            for pair in query.split("&"):
-                key, value = pair.split("=", 1)
-                incoming_params[key] = value
-        code = str(incoming_params["code"])
-        user_id = str(incoming_params["user_id"])
+        request = parse.urlparse(self.path)
+        query_params = parse.parse_qs(request.query)
+        scope = str(query_params["scope"][0])
+        code = str(query_params["code"][0])
+        user_id = str(query_params["user_id"][0])
 
         self.send_response(303)
         self.send_header("Location", BOT_URL)
         self.end_headers()
 
         # Проверка выданных в Strava прав и создание пользователя
-        if SCOPE in str(incoming_params["scope"]):
+        if SCOPE in scope:
             refresh_token = strava.get_refresh_token(CLIENT_ID, CLIENT_SECRET, code)
             USER_DB.upsert(
                 {
@@ -61,5 +58,5 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
 
 
 # Старт сервера
-tcp_server = TCPServer(("", int(PORT)), ParamsHTTPRequestHandler)
+tcp_server = TCPServer(("", int(PORT)), AuthRequestHandler)
 tcp_server.serve_forever()
