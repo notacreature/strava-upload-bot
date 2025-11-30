@@ -31,10 +31,35 @@ PER_PAGE = 4
 
 class KeyboardFormatter:
     @staticmethod
+    def format_list_keyboard(keys: dict, page: int, per_page: int, activities: list) -> InlineKeyboardMarkup:
+        inline_keys = [[]]
+
+        if page == 1:
+            inline_keys[0].append(InlineKeyboardButton(keys["key_refresh"], callback_data="Refresh"))
+            inline_keys[0].append(InlineKeyboardButton(keys["key_next"], callback_data="NextPage"))
+        elif page > 1:
+            if len(activities) == per_page:
+                inline_keys[0].append(InlineKeyboardButton(keys["key_prev"], callback_data="PrevPage"))
+                inline_keys[0].append(InlineKeyboardButton(keys["key_next"], callback_data="NextPage"))
+            elif len(activities) < per_page:
+                inline_keys[0].append(InlineKeyboardButton(keys["key_prev"], callback_data="PrevPage"))
+                inline_keys[0].append(InlineKeyboardButton(keys["key_refresh"], callback_data="Refresh"))
+
+        for activity in activities:
+            inline_keys.insert(-1, [InlineKeyboardButton(TEXT["key_activity"].format(activity["name"], activity["date"]), callback_data=activity["id"])])
+        return InlineKeyboardMarkup(inline_keys)
+
+    @staticmethod
     def format_activity_data(format: str, url: str, activity: dict) -> str:
         activity_link = url.format(activity["id"])
         return format.format(
-            activity["name"], activity["sport_type"], activity["moving_time"], activity["distance"], activity["gear"], activity["description"], activity_link
+            activity["name"],
+            activity["sport_type"],
+            activity["moving_time"],
+            activity["distance"],
+            activity["gear"],
+            activity["description"],
+            activity_link,
         )
 
     @staticmethod
@@ -68,22 +93,14 @@ class KeyboardFormatter:
         )
 
     @staticmethod
-    def format_list_keyboard(keys: dict, page: int, per_page: int, activities: list) -> InlineKeyboardMarkup:
-        inline_keys = [[]]
-
-        if page == 1:
-            inline_keys[0].append(InlineKeyboardButton(keys["key_refresh"], callback_data="Refresh"))
-            inline_keys[0].append(InlineKeyboardButton(keys["key_next"], callback_data="NextPage"))
-        elif page > 1:
-            if len(activities) == per_page:
-                inline_keys[0].append(InlineKeyboardButton(keys["key_prev"], callback_data="PrevPage"))
-                inline_keys[0].append(InlineKeyboardButton(keys["key_next"], callback_data="NextPage"))
-            elif len(activities) < per_page:
-                inline_keys[0].append(InlineKeyboardButton(keys["key_prev"], callback_data="PrevPage"))
-                inline_keys[0].append(InlineKeyboardButton(keys["key_refresh"], callback_data="Refresh"))
-
-        for activity in activities:
-            inline_keys.insert(-1, [InlineKeyboardButton(TEXT["key_activity"].format(activity["name"], activity["date"]), callback_data=activity["id"])])
+    def format_gear_keyboard(gears: dict) -> InlineKeyboardMarkup:
+        inline_keys = []
+        for gear in gears:
+            inline_keys.append(
+                [
+                    InlineKeyboardButton(f"{gear['type']} {gear['name']} ({gear['converted_distance']} km)", callback_data=gear["id"]),
+                ]
+            )
         return InlineKeyboardMarkup(inline_keys)
 
 
@@ -287,19 +304,12 @@ async def edit_type_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def edit_gear_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     access_token = context.user_data["access_token"]
-    gear_list = await strava.get_gear(access_token)
-    inline_keys = []
-    for gear in gear_list:
-        inline_keys.append(
-            [
-                InlineKeyboardButton(f"{gear['type']} {gear['name']}", callback_data=gear["id"]),
-            ]
-        )
-    inline_keyboard = InlineKeyboardMarkup(inline_keys)
+    gears = await strava.get_gear(access_token)
+
     await update.callback_query.edit_message_text(
         TEXT["reply_edit_gear"],
         constants.ParseMode.MARKDOWN,
-        reply_markup=inline_keyboard,
+        reply_markup=KeyboardFormatter.format_gear_keyboard(gears),
     )
     return "edit_gear_dialog"
 
@@ -398,15 +408,11 @@ def main():
 
     delete_entry = CommandHandler("delete", delete_user_data_dialog)
     list_entry = CommandHandler("activities", show_activities)
-    file_entry = MessageHandler(
-        filters.Document.FileExtension("fit") | filters.Document.FileExtension("tcx") | filters.Document.FileExtension("gpx"), upload_activity
-    )
+    file_entry = MessageHandler(filters.Document.FileExtension("fit") | filters.Document.FileExtension("tcx") | filters.Document.FileExtension("gpx"), upload_activity)
     cancel_fallback = CommandHandler("cancel", cancel)
     start_reply = CommandHandler("start", start)
     help_reply = CommandHandler("help", help)
-    other_reply = MessageHandler(
-        ~filters.COMMAND & ~filters.Document.FileExtension("fit") & ~filters.Document.FileExtension("tcx") & ~filters.Document.FileExtension("gpx"), other
-    )
+    other_reply = MessageHandler(~filters.COMMAND & ~filters.Document.FileExtension("fit") & ~filters.Document.FileExtension("tcx") & ~filters.Document.FileExtension("gpx"), other)
 
     activity_dialog = ConversationHandler(
         entry_points=[
