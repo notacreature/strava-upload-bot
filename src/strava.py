@@ -60,7 +60,7 @@ async def get_upload(upload_id: str, access_token: str):
     url = f"https://www.strava.com/api/v3/uploads/{upload_id}"
     headers = {"Authorization": f"Bearer {access_token}"}
     delay = 1
-    while True:
+    while delay < 60:
         response = requests.get(url, headers=headers)
         upload = response.json()
         if upload["activity_id"] or upload["error"]:
@@ -70,7 +70,7 @@ async def get_upload(upload_id: str, access_token: str):
         delay *= 2
 
 
-async def get_activity(access_token: str, activity_id: str) -> dict:
+async def get_activity(activity_id: str, access_token: str) -> dict:
     url = f"https://www.strava.com/api/v3/activities/{activity_id}"
     headers = {"Authorization": f"Bearer {access_token}"}
     response = requests.get(url, headers=headers)
@@ -136,7 +136,7 @@ async def get_gear(access_token: str) -> list:
     return gear_list
 
 
-async def update_activity(access_token: str, activity_id: str, description: str = None, name: str = None, sport_type: str = None, gear_id: str = None) -> dict:
+async def update_activity(activity_id: str, access_token: str, description: str = None, name: str = None, sport_type: str = None, gear_id: str = None) -> dict:
     url = f"https://www.strava.com/api/v3/activities/{activity_id}"
     params = {
         key: value

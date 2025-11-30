@@ -216,7 +216,7 @@ async def show_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     context.user_data["activity_id"] = activity_id = update.callback_query.data
     access_token = context.user_data["access_token"]
-    activity = await strava.get_activity(access_token, activity_id)
+    activity = await strava.get_activity(activity_id, access_token)
 
     await update.callback_query.edit_message_text(
         KeyboardFormatter.format_activity_data(TEXT["reply_activity_shown"], URL["activity"], activity),
@@ -249,7 +249,7 @@ async def upload_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["activity_id"] = activity_id = upload["activity_id"]
     if activity_id:
-        activity = await strava.get_activity(access_token, activity_id)
+        activity = await strava.get_activity(activity_id, access_token)
 
         await update.message.reply_text(
             KeyboardFormatter.format_activity_data(TEXT["reply_activity_uploaded"], URL["activity"], activity),
@@ -313,11 +313,11 @@ async def edit_gear_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def edit_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    access_token = context.user_data["access_token"]
     activity_id = context.user_data["activity_id"]
+    access_token = context.user_data["access_token"]
     name = update.message.text
-    await strava.update_activity(access_token, activity_id, name=name)
-    activity = await strava.get_activity(access_token, activity_id)
+    await strava.update_activity(activity_id, access_token, name=name)
+    activity = await strava.get_activity(activity_id, access_token)
 
     await update.message.reply_text(
         KeyboardFormatter.format_activity_data(TEXT["reply_activity_updated"], URL["activity"], activity),
@@ -328,11 +328,11 @@ async def edit_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def edit_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    access_token = context.user_data["access_token"]
     activity_id = context.user_data["activity_id"]
+    access_token = context.user_data["access_token"]
     description = update.message.text
-    await strava.update_activity(access_token, activity_id, description=description)
-    activity = await strava.get_activity(access_token, activity_id)
+    await strava.update_activity(activity_id, access_token, description=description)
+    activity = await strava.get_activity(activity_id, access_token)
 
     await update.message.reply_text(
         KeyboardFormatter.format_activity_data(TEXT["reply_activity_updated"], URL["activity"], activity),
@@ -344,11 +344,11 @@ async def edit_desc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def edit_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
-    access_token = context.user_data["access_token"]
     activity_id = context.user_data["activity_id"]
+    access_token = context.user_data["access_token"]
     sport_type = update.callback_query.data
-    await strava.update_activity(access_token, activity_id, sport_type=sport_type)
-    activity = await strava.get_activity(access_token, activity_id)
+    await strava.update_activity(activity_id, access_token, sport_type=sport_type)
+    activity = await strava.get_activity(activity_id, access_token)
 
     await update.callback_query.edit_message_text(
         KeyboardFormatter.format_activity_data(TEXT["reply_activity_updated"], URL["activity"], activity),
@@ -360,11 +360,11 @@ async def edit_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def edit_gear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
-    access_token = context.user_data["access_token"]
     activity_id = context.user_data["activity_id"]
+    access_token = context.user_data["access_token"]
     gear_id = update.callback_query.data
-    await strava.update_activity(access_token, activity_id, gear_id=gear_id)
-    activity = await strava.get_activity(access_token, activity_id)
+    await strava.update_activity(activity_id, access_token, gear_id=gear_id)
+    activity = await strava.get_activity(activity_id, access_token)
 
     await update.callback_query.edit_message_text(
         KeyboardFormatter.format_activity_data(TEXT["reply_activity_updated"], URL["activity"], activity),
