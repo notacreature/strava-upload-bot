@@ -1,9 +1,3 @@
-# WONTDO заменить строки в callback_data на структурированные, "data:чётотам" и/или "action:чётотам" (внимательно для regexp и chtype)
-# DONE объединить refresh и пейджинг
-# WONTDO привести к общему виду обновление данных в context.user_data
-# DONE абстрагировать inline_keyboard для пейджинга
-# DONE заменить change/ch на edit
-
 import os, requests, configparser, strava
 from tinydb import TinyDB, Query
 from telegram import (
