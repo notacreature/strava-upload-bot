@@ -1,8 +1,8 @@
-# TODO заменить строки в callback_data на структурированные, "data:чётотам" и/или "action:чётотам" (внимательно для regexp и chtype)
+# WONTDO заменить строки в callback_data на структурированные, "data:чётотам" и/или "action:чётотам" (внимательно для regexp и chtype)
 # DONE объединить refresh и пейджинг
-# TODO привести к общему виду обновление данных в context.user_data
+# WONTDO привести к общему виду обновление данных в context.user_data
 # DONE абстрагировать inline_keyboard для пейджинга
-# TODO заменить change/ch на edit
+# DONE заменить change/ch на edit
 
 import os, requests, configparser, strava
 from tinydb import TinyDB, Query
@@ -56,7 +56,7 @@ class KeyboardFormatter:
                     InlineKeyboardButton(keys["key_edit_gear"], callback_data="EditGear"),
                 ],
                 [
-                    InlineKeyboardButton(keys["key_activities"], callback_data="List"),
+                    InlineKeyboardButton(keys["key_activities"], callback_data="ShowActivities"),
                 ],
             ]
         )
@@ -425,7 +425,7 @@ def main():
                 CallbackQueryHandler(update_activities, pattern="Refresh|NextPage|PrevPage"),
             ],
             "activity_shown": [
-                CallbackQueryHandler(show_activities, pattern="List"),
+                CallbackQueryHandler(show_activities, pattern="ShowActivities"),
                 CallbackQueryHandler(edit_name_dialog, pattern="EditName"),
                 CallbackQueryHandler(edit_desc_dialog, pattern="EditDesc"),
                 CallbackQueryHandler(edit_type_dialog, pattern="EditType"),
