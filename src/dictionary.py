@@ -1,6 +1,6 @@
 TEXT = {
     "key_activities": "📃 Последние тренировки",
-    "key_activity": "{} 🔸 {}",
+    "key_activity": "{} ▸ {}",
     "key_auth": "🔑 Открыть Strava",
     "key_edit_desc": "✏ Описание",
     "key_edit_gear": "✏ Экипировка",
