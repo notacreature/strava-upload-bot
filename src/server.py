@@ -1,6 +1,6 @@
 import os, configparser, requests, strava
 from http import server
-from socketserver import BaseServer, TCPServer
+from urllib import parse
 from tinydb import TinyDB, Query
 from dictionary import TEXT, URL
 
@@ -16,30 +16,25 @@ TOKEN = CONFIG["Telegram"]["BOT_TOKEN"]
 PORT = CONFIG["Server"]["PORT"]
 
 
-class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
+class AuthRequestHandler(server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        path = self.path
-        incoming_params = {}
-        if "?" in path:
-            path, query = path.split("?", 1)
-            for pair in query.split("&"):
-                key, value = pair.split("=", 1)
-                incoming_params[key] = value
-        user_id = str(incoming_params["user_id"])
-        code = str(incoming_params["code"])
+        request = parse.urlparse(self.path)
+        query_params = parse.parse_qs(request.query)
+        scope = str(query_params["scope"][0])
+        code = str(query_params["code"][0])
+        user_id = str(query_params["user_id"][0])
 
-        self.send_response(301)
+        self.send_response(303)
         self.send_header("Location", BOT_URL)
         self.end_headers()
 
         # Проверка выданных в Strava прав и создание пользователя
-        if SCOPE in str(incoming_params["scope"]):
-            refresh_token = strava.get_refresh_token(user_id, CLIENT_ID, CLIENT_SECRET, code)
+        if SCOPE in scope:
+            refresh_token = strava.get_refresh_token(CLIENT_ID, CLIENT_SECRET, code)
             USER_DB.upsert(
                 {
                     "user_id": user_id,
                     "refresh_token": refresh_token,
-                    "favorites": [],
                 },
                 USER_QUERY["user_id"] == user_id,
             )
@@ -62,5 +57,5 @@ class ParamsHTTPRequestHandler(server.SimpleHTTPRequestHandler):
 
 
 # Старт сервера
-tcp_server = TCPServer(("", int(PORT)), ParamsHTTPRequestHandler)
-BaseServer.serve_forever(tcp_server)
+auth_server = server.ThreadingHTTPServer(("", int(PORT)), AuthRequestHandler)
+auth_server.serve_forever()
